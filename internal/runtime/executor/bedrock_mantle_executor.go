@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
 	"strconv"
 	"strings"
@@ -32,6 +33,28 @@ type BedrockMantleExecutor struct {
 	cfg           *config.Config
 	credMu        sync.RWMutex
 	credProviders map[string]aws.CredentialsProvider
+}
+
+var mantleTransport = &http.Transport{
+	Proxy: http.ProxyFromEnvironment,
+	DialContext: (&net.Dialer{
+		Timeout:   30 * time.Second,
+		KeepAlive: 30 * time.Second,
+	}).DialContext,
+	ForceAttemptHTTP2:     true,
+	MaxIdleConns:          200,
+	MaxIdleConnsPerHost:   50,
+	IdleConnTimeout:       90 * time.Second,
+	TLSHandshakeTimeout:   10 * time.Second,
+	ExpectContinueTimeout: 1 * time.Second,
+}
+
+func (e *BedrockMantleExecutor) getHTTPClient(ctx context.Context, auth *cliproxyauth.Auth) *http.Client {
+	client := helps.NewProxyAwareHTTPClient(ctx, e.cfg, auth, 0)
+	if client.Transport == nil {
+		client.Transport = mantleTransport
+	}
+	return client
 }
 
 // NewBedrockMantleExecutor creates an executor for Bedrock Mantle.
@@ -155,7 +178,7 @@ func (e *BedrockMantleExecutor) HttpRequest(ctx context.Context, auth *cliproxya
 		ctx = req.Context()
 	}
 	httpReq := req.WithContext(ctx)
-	httpClient := helps.NewProxyAwareHTTPClient(ctx, e.cfg, auth, 0)
+	httpClient := e.getHTTPClient(ctx, auth)
 	return httpClient.Do(httpReq)
 }
 
@@ -232,7 +255,7 @@ func (e *BedrockMantleExecutor) Execute(ctx context.Context, auth *cliproxyauth.
 		AuthValue: authValue,
 	})
 
-	httpClient := helps.NewProxyAwareHTTPClient(ctx, e.cfg, auth, 0)
+	httpClient := e.getHTTPClient(ctx, auth)
 	httpClient = reporter.TrackHTTPClient(httpClient)
 	httpResp, err := httpClient.Do(httpReq)
 	if err != nil {
@@ -350,7 +373,7 @@ func (e *BedrockMantleExecutor) ExecuteStream(ctx context.Context, auth *cliprox
 		AuthValue: authValue,
 	})
 
-	httpClient := helps.NewProxyAwareHTTPClient(ctx, e.cfg, auth, 0)
+	httpClient := e.getHTTPClient(ctx, auth)
 	httpClient = reporter.TrackHTTPClient(httpClient)
 	httpResp, err := httpClient.Do(httpReq)
 	if err != nil {
