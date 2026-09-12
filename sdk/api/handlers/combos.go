@@ -12,6 +12,7 @@ import (
 
 	"github.com/router-for-me/CLIProxyAPI/v7/internal/config"
 	"github.com/router-for-me/CLIProxyAPI/v7/internal/interfaces"
+	"github.com/router-for-me/CLIProxyAPI/v7/internal/registry"
 	"github.com/tidwall/gjson"
 	"github.com/tidwall/sjson"
 )
@@ -313,17 +314,61 @@ func comboErrorStream(errMsg *interfaces.ErrorMessage) (<-chan []byte, http.Head
 	return data, nil, errs
 }
 
+func intersectEffortTiers(tiersA, tiersB []string) []string {
+	if len(tiersA) == 0 || len(tiersB) == 0 {
+		return nil
+	}
+	setB := make(map[string]struct{}, len(tiersB))
+	for _, t := range tiersB {
+		setB[strings.ToLower(strings.TrimSpace(t))] = struct{}{}
+	}
+	var out []string
+	for _, t := range tiersA {
+		norm := strings.ToLower(strings.TrimSpace(t))
+		if _, ok := setB[norm]; ok {
+			out = append(out, norm)
+		}
+	}
+	return out
+}
+
 // ComboCatalogModels returns protocol-shaped model metadata for enabled combos.
 func (h *BaseAPIHandler) ComboCatalogModels(format string) []map[string]any {
 	if h == nil || h.Cfg == nil || len(h.Cfg.Combos) == 0 {
 		return nil
 	}
 	out := make([]map[string]any, 0, len(h.Cfg.Combos))
+	reg := registry.GetGlobalRegistry()
 	for _, combo := range h.Cfg.Combos {
 		name := strings.TrimSpace(combo.Name)
 		if combo.Disabled || name == "" || len(combo.Models) == 0 {
 			continue
 		}
+
+		activeMembers := 0
+		for _, member := range combo.Models {
+			if reg.GetModelCount(member) > 0 {
+				activeMembers++
+			}
+		}
+
+		if combo.Strategy == "fusion" {
+			minRequired := combo.MinSuccessfulModels
+			if minRequired <= 0 {
+				minRequired = 1
+			}
+			if activeMembers < minRequired {
+				continue
+			}
+			if combo.JudgeModel != "" && reg.GetModelCount(combo.JudgeModel) == 0 {
+				continue
+			}
+		} else {
+			if activeMembers == 0 {
+				continue
+			}
+		}
+
 		displayName := strings.TrimSpace(combo.DisplayName)
 		if displayName == "" {
 			displayName = name
@@ -337,13 +382,92 @@ func (h *BaseAPIHandler) ComboCatalogModels(format string) []map[string]any {
 			})
 			continue
 		}
-		out = append(out, map[string]any{
+
+		var minContext int
+		var minOutput int
+		allReasoning := true
+		allVision := true
+		var commonTiers []string
+		firstModel := true
+
+		for _, member := range combo.Models {
+			info := reg.GetModelInfo(member, "")
+			if info == nil {
+				info = registry.LookupStaticModelInfo(member)
+			}
+			if info == nil {
+				continue
+			}
+			if info.ContextLength > 0 && (minContext == 0 || info.ContextLength < minContext) {
+				minContext = info.ContextLength
+			}
+			if info.MaxCompletionTokens > 0 && (minOutput == 0 || info.MaxCompletionTokens < minOutput) {
+				minOutput = info.MaxCompletionTokens
+			}
+			if info.Thinking == nil {
+				allReasoning = false
+			} else {
+				if firstModel {
+					commonTiers = append([]string(nil), info.Thinking.Levels...)
+				} else {
+					commonTiers = intersectEffortTiers(commonTiers, info.Thinking.Levels)
+				}
+			}
+			hasImage := false
+			for _, mod := range info.SupportedInputModalities {
+				if strings.EqualFold(mod, "image") {
+					hasImage = true
+					break
+				}
+			}
+			if !hasImage {
+				allVision = false
+			}
+			firstModel = false
+		}
+
+		entry := map[string]any{
 			"id":           name,
 			"object":       "model",
 			"created":      int64(0),
 			"owned_by":     "combo",
 			"display_name": displayName,
-		})
+		}
+		if minContext > 0 {
+			entry["context_length"] = minContext
+		}
+		if minOutput > 0 {
+			entry["max_completion_tokens"] = minOutput
+		}
+		if allReasoning {
+			entry["reasoning"] = true
+		}
+		if allVision {
+			entry["input"] = []string{"text", "image"}
+		} else {
+			entry["input"] = []string{"text"}
+		}
+		capabilities := map[string]any{}
+		if minContext > 0 {
+			capabilities["contextWindow"] = minContext
+		}
+		if minOutput > 0 {
+			capabilities["maxOutput"] = minOutput
+		}
+		if allReasoning {
+			capabilities["reasoning"] = true
+			if len(commonTiers) > 0 {
+				capabilities["effort_tiers"] = commonTiers
+			}
+		}
+		if allVision {
+			capabilities["vision"] = true
+		}
+		if len(capabilities) > 0 {
+			entry["capabilities"] = capabilities
+		}
+
+		out = append(out, entry)
 	}
 	return out
 }

@@ -77,6 +77,9 @@ type ModelInfo struct {
 	// This is optional and currently used for Gemini thinking budget normalization.
 	Thinking *ThinkingSupport `json:"thinking,omitempty"`
 
+	// Pricing holds cost per million tokens for input, output, and caching.
+	Pricing *ModelPricing `json:"pricing,omitempty"`
+
 	// Config holds model-specific runtime overrides loaded from models.json.
 	Config *ModelConfig `json:"config,omitempty"`
 
@@ -95,6 +98,26 @@ type ModelConfig struct {
 	// OverrideHeader forces upstream request headers when non-empty.
 	// Keys are header names (e.g. "user-agent"); values replace any existing header.
 	OverrideHeader map[string]string `json:"override_header,omitempty"`
+}
+
+// ModelPricing describes token pricing and context thresholds for a model per million tokens.
+type ModelPricing struct {
+	Input         float64             `json:"input"`
+	Output        float64             `json:"output"`
+	Cached        float64             `json:"cached,omitempty"`
+	CacheCreation float64             `json:"cache_creation,omitempty"`
+	Reasoning     float64             `json:"reasoning,omitempty"`
+	LongContext   *LongContextPricing `json:"long_context,omitempty"`
+}
+
+// LongContextPricing describes token pricing when prompt tokens exceed the threshold.
+type LongContextPricing struct {
+	Threshold     int     `json:"threshold"`
+	Input         float64 `json:"input"`
+	Output        float64 `json:"output"`
+	Cached        float64 `json:"cached,omitempty"`
+	CacheCreation float64 `json:"cache_creation,omitempty"`
+	Reasoning     float64 `json:"reasoning,omitempty"`
 }
 
 type availableModelsCacheEntry struct {
@@ -647,6 +670,14 @@ func cloneModelInfo(model *ModelInfo) *ModelInfo {
 			copyThinking.Levels = append([]string(nil), model.Thinking.Levels...)
 		}
 		copyModel.Thinking = &copyThinking
+	}
+	if model.Pricing != nil {
+		copyPricing := *model.Pricing
+		if model.Pricing.LongContext != nil {
+			copyLong := *model.Pricing.LongContext
+			copyPricing.LongContext = &copyLong
+		}
+		copyModel.Pricing = &copyPricing
 	}
 	if model.Config != nil {
 		copyConfig := *model.Config
@@ -1536,6 +1567,72 @@ func (r *ModelRegistry) convertModelToMap(model *ModelInfo, handlerType string) 
 		}
 		if len(model.SupportedParameters) > 0 {
 			result["supported_parameters"] = append([]string(nil), model.SupportedParameters...)
+		}
+		if model.Thinking != nil {
+			result["reasoning"] = true
+		}
+		if len(model.SupportedInputModalities) > 0 {
+			result["input"] = append([]string(nil), model.SupportedInputModalities...)
+		}
+		capabilities := map[string]any{}
+		if model.Thinking != nil {
+			capabilities["reasoning"] = true
+			if len(model.Thinking.Levels) > 0 {
+				capabilities["effort_tiers"] = append([]string(nil), model.Thinking.Levels...)
+			}
+		}
+		if model.ContextLength > 0 {
+			capabilities["contextWindow"] = model.ContextLength
+		}
+		if model.MaxCompletionTokens > 0 {
+			capabilities["maxOutput"] = model.MaxCompletionTokens
+		}
+		for _, mod := range model.SupportedInputModalities {
+			if strings.EqualFold(mod, "image") {
+				capabilities["vision"] = true
+				break
+			}
+		}
+		if len(capabilities) > 0 {
+			result["capabilities"] = capabilities
+		}
+		if model.Pricing != nil {
+			pricingMap := map[string]any{
+				"input":  model.Pricing.Input,
+				"output": model.Pricing.Output,
+			}
+			if model.Pricing.Cached > 0 {
+				pricingMap["cached"] = model.Pricing.Cached
+			}
+			if model.Pricing.CacheCreation > 0 {
+				pricingMap["cache_creation"] = model.Pricing.CacheCreation
+			}
+			if model.Pricing.Reasoning > 0 {
+				pricingMap["reasoning"] = model.Pricing.Reasoning
+			}
+			if model.Pricing.LongContext != nil {
+				longMap := map[string]any{
+					"threshold": model.Pricing.LongContext.Threshold,
+					"input":     model.Pricing.LongContext.Input,
+					"output":    model.Pricing.LongContext.Output,
+				}
+				if model.Pricing.LongContext.Cached > 0 {
+					longMap["cached"] = model.Pricing.LongContext.Cached
+				}
+				if model.Pricing.LongContext.CacheCreation > 0 {
+					longMap["cache_creation"] = model.Pricing.LongContext.CacheCreation
+				}
+				if model.Pricing.LongContext.Reasoning > 0 {
+					longMap["reasoning"] = model.Pricing.LongContext.Reasoning
+				}
+				pricingMap["long_context"] = longMap
+			}
+			result["pricing"] = pricingMap
+		}
+		if model.OwnedBy == "bedrock-mantle" {
+			result["compat"] = map[string]any{
+				"api": "openai-responses",
+			}
 		}
 		return result
 

@@ -69,25 +69,20 @@ func (h *OpenAIAPIHandler) OpenAIModels(c *gin.Context) {
 	// Get all available models
 	allModels := h.Models()
 
-	// Filter to only include the 4 required fields: id, object, created, owned_by
-	filteredModels := make([]map[string]any, len(allModels))
-	for i, model := range allModels {
-		filteredModel := map[string]any{
-			"id":     model["id"],
-			"object": model["object"],
+	// Strip internal metadata fields while preserving rich public capabilities
+	filteredModels := make([]map[string]any, 0, len(allModels))
+	for _, model := range allModels {
+		if model == nil {
+			continue
 		}
-
-		// Add created field if it exists
-		if created, exists := model["created"]; exists {
-			filteredModel["created"] = created
+		cleanModel := make(map[string]any, len(model))
+		for k, v := range model {
+			if k == "metadata_model_id" || k == "MetadataModelID" {
+				continue
+			}
+			cleanModel[k] = v
 		}
-
-		// Add owned_by field if it exists
-		if ownedBy, exists := model["owned_by"]; exists {
-			filteredModel["owned_by"] = ownedBy
-		}
-
-		filteredModels[i] = filteredModel
+		filteredModels = append(filteredModels, cleanModel)
 	}
 
 	h.WriteModelListResponse(c, h.HandlerType(), gin.H{

@@ -155,7 +155,7 @@ func (s *Service) registerModelsForAuthWithCache(ctx context.Context, a *coreaut
 		}
 		models = applyExcludedModels(models, excluded)
 	case "bedrock-mantle":
-		if entry := s.resolveConfigBedrockMantleKey(a); entry != nil && len(entry.Models) > 0 {
+		if entry := s.resolveConfigBedrockMantleKey(a); entry != nil {
 			models = buildBedrockMantleConfigModels(entry)
 		}
 	default:
@@ -500,14 +500,51 @@ func (s *Service) resolveConfigBedrockMantleKey(auth *coreauth.Auth) *config.Bed
 }
 
 func buildBedrockMantleConfigModels(entry *config.BedrockMantleConfig) []*ModelInfo {
-	if entry == nil || len(entry.Models) == 0 {
+	if entry == nil {
 		return nil
+	}
+	if len(entry.Models) == 0 {
+		return registry.GetBedrockMantleModels()
 	}
 	compat := &config.OpenAICompatibility{
 		Name:   "bedrock-mantle",
 		Models: entry.Models,
 	}
-	return buildOpenAICompatibilityConfigModels(compat)
+	models := buildOpenAICompatibilityConfigModels(compat)
+	for _, m := range models {
+		if m == nil {
+			continue
+		}
+		staticInfo := registry.LookupStaticBedrockMantleModelInfo(m.MetadataModelID)
+		if staticInfo == nil {
+			staticInfo = registry.LookupStaticBedrockMantleModelInfo(m.ID)
+		}
+		if staticInfo != nil {
+			if m.ContextLength <= 0 && staticInfo.ContextLength > 0 {
+				m.ContextLength = staticInfo.ContextLength
+				m.MaxContextLength = staticInfo.MaxContextLength
+			}
+			if m.MaxCompletionTokens <= 0 && staticInfo.MaxCompletionTokens > 0 {
+				m.MaxCompletionTokens = staticInfo.MaxCompletionTokens
+			}
+			if !m.ExplicitThinking && staticInfo.Thinking != nil {
+				m.Thinking = staticInfo.Thinking
+			}
+			if !m.ExplicitInputModalities && len(staticInfo.SupportedInputModalities) > 0 {
+				m.SupportedInputModalities = append([]string(nil), staticInfo.SupportedInputModalities...)
+			}
+			if len(m.SupportedOutputModalities) == 0 && len(staticInfo.SupportedOutputModalities) > 0 {
+				m.SupportedOutputModalities = append([]string(nil), staticInfo.SupportedOutputModalities...)
+			}
+			if m.Pricing == nil && staticInfo.Pricing != nil {
+				m.Pricing = staticInfo.Pricing
+			}
+			if (m.DisplayName == "" || m.DisplayName == m.ID) && staticInfo.DisplayName != "" {
+				m.DisplayName = staticInfo.DisplayName
+			}
+		}
+	}
+	return models
 }
 
 func (s *Service) resolveConfigCodexKey(auth *coreauth.Auth) *config.CodexKey {

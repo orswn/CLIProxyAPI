@@ -280,6 +280,373 @@ func xaiBuiltinVideo15PreviewModelInfo() *ModelInfo {
 	}
 }
 
+// GetBedrockMantleModels returns standard OpenAI model definitions served on Bedrock Mantle.
+func GetBedrockMantleModels() []*ModelInfo {
+	return []*ModelInfo{
+		bedrockMantleLunaModelInfo("openai.gpt-5.6-luna"),
+		bedrockMantleLunaModelInfo("gpt-5.6-luna"),
+		bedrockMantleTerraModelInfo("openai.gpt-5.6-terra"),
+		bedrockMantleTerraModelInfo("gpt-5.6-terra"),
+		bedrockMantleSolModelInfo("openai.gpt-5.6-sol"),
+		bedrockMantleSolModelInfo("gpt-5.6-sol"),
+		bedrockMantleAstraModelInfo("openai.gpt-6-astra"),
+		bedrockMantleAstraModelInfo("gpt-6-astra"),
+		bedrockMantleGPT55ModelInfo("openai.gpt-5.5"),
+		bedrockMantleGPT55ModelInfo("gpt-5.5"),
+		bedrockMantleGPT54ModelInfo("openai.gpt-5.4"),
+		bedrockMantleGPT54ModelInfo("gpt-5.4"),
+		bedrockMantleCyberModelInfo("openai.gpt-5.6-cyber"),
+		bedrockMantleCyberModelInfo("gpt-5.6-cyber"),
+		bedrockMantleDaybreakBlueSolModelInfo("openai.gpt-daybreak-blue-5.6-sol"),
+		bedrockMantleDaybreakBlueSolModelInfo("gpt-daybreak-blue-5.6-sol"),
+		bedrockMantleOSS120BModelInfo("openai.gpt-oss-120b"),
+		bedrockMantleOSS120BModelInfo("gpt-oss-120b"),
+		bedrockMantleOSS20BModelInfo("openai.gpt-oss-20b"),
+		bedrockMantleOSS20BModelInfo("gpt-oss-20b"),
+		bedrockMantleOSSSafeguard120BModelInfo("openai.gpt-oss-safeguard-120b"),
+		bedrockMantleOSSSafeguard120BModelInfo("gpt-oss-safeguard-120b"),
+		bedrockMantleOSSSafeguard20BModelInfo("openai.gpt-oss-safeguard-20b"),
+		bedrockMantleOSSSafeguard20BModelInfo("gpt-oss-safeguard-20b"),
+	}
+}
+
+func bedrockMantleLunaModelInfo(id string) *ModelInfo {
+	return &ModelInfo{
+		ID:                        id,
+		Object:                    "model",
+		Created:                   1783616400,
+		OwnedBy:                   "bedrock-mantle",
+		Type:                      "openai",
+		DisplayName:               "GPT 5.6 Luna",
+		Version:                   "gpt-5.6",
+		Description:               "Fast and affordable agentic coding model on Bedrock Mantle.",
+		ContextLength:             1000000,
+		MaxCompletionTokens:       128000,
+		SupportedParameters:       []string{"tools"},
+		SupportedInputModalities:  []string{"text", "image"},
+		SupportedOutputModalities: []string{"text"},
+		Thinking:                  &ThinkingSupport{Levels: []string{"none", "low", "medium", "high", "xhigh", "max"}},
+		Pricing: &ModelPricing{
+			Input:         0.22,
+			Output:        1.32,
+			Cached:        0.022,
+			CacheCreation: 0.275,
+			Reasoning:     1.32,
+			LongContext: &LongContextPricing{
+				Threshold:     272000,
+				Input:         0.44,
+				Output:        1.98,
+				Cached:        0.044,
+				CacheCreation: 0.55,
+				Reasoning:     1.98,
+			},
+		},
+	}
+}
+
+func bedrockMantleTerraModelInfo(id string) *ModelInfo {
+	return &ModelInfo{
+		ID:                        id,
+		Object:                    "model",
+		Created:                   1783616400,
+		OwnedBy:                   "bedrock-mantle",
+		Type:                      "openai",
+		DisplayName:               "GPT 5.6 Terra",
+		Version:                   "gpt-5.6",
+		Description:               "Balanced agentic coding model for everyday work on Bedrock Mantle.",
+		ContextLength:             1000000,
+		MaxCompletionTokens:       128000,
+		SupportedParameters:       []string{"tools"},
+		SupportedInputModalities:  []string{"text", "image"},
+		SupportedOutputModalities: []string{"text"},
+		Thinking:                  &ThinkingSupport{Levels: []string{"none", "low", "medium", "high", "xhigh", "max"}},
+		Pricing: &ModelPricing{
+			Input:         2.20,
+			Output:        13.20,
+			Cached:        0.22,
+			CacheCreation: 2.75,
+			Reasoning:     13.20,
+			LongContext: &LongContextPricing{
+				Threshold:     272000,
+				Input:         4.40,
+				Output:        19.80,
+				Cached:        0.44,
+				CacheCreation: 5.50,
+				Reasoning:     19.80,
+			},
+		},
+	}
+}
+
+func bedrockMantleSolModelInfo(id string) *ModelInfo {
+	return &ModelInfo{
+		ID:                        id,
+		Object:                    "model",
+		Created:                   1783616400,
+		OwnedBy:                   "bedrock-mantle",
+		Type:                      "openai",
+		DisplayName:               "GPT 5.6 Sol",
+		Version:                   "gpt-5.6",
+		Description:               "Frontier reasoning and agentic coding model on Bedrock Mantle.",
+		ContextLength:             1000000,
+		MaxCompletionTokens:       128000,
+		SupportedParameters:       []string{"tools"},
+		SupportedInputModalities:  []string{"text", "image"},
+		SupportedOutputModalities: []string{"text"},
+		Thinking:                  &ThinkingSupport{Levels: []string{"none", "low", "medium", "high", "xhigh", "max"}},
+		Pricing: &ModelPricing{
+			Input:         4.40,
+			Output:        22.00,
+			Cached:        0.44,
+			CacheCreation: 5.50,
+			Reasoning:     22.00,
+			LongContext: &LongContextPricing{
+				Threshold:     272000,
+				Input:         8.80,
+				Output:        33.00,
+				Cached:        0.88,
+				CacheCreation: 11.00,
+				Reasoning:     33.00,
+			},
+		},
+	}
+}
+
+func bedrockMantleAstraModelInfo(id string) *ModelInfo {
+	return &ModelInfo{
+		ID:                        id,
+		Object:                    "model",
+		Created:                   1788868800,
+		OwnedBy:                   "bedrock-mantle",
+		Type:                      "openai",
+		DisplayName:               "GPT 6.0 Astra",
+		Version:                   "gpt-6",
+		Description:               "Frontier reasoning and coding model on Bedrock Mantle.",
+		ContextLength:             1050000,
+		MaxCompletionTokens:       128000,
+		SupportedParameters:       []string{"tools"},
+		SupportedInputModalities:  []string{"text", "image"},
+		SupportedOutputModalities: []string{"text"},
+		Thinking:                  &ThinkingSupport{Levels: []string{"none", "low", "medium", "high", "xhigh", "ultra"}},
+		Pricing: &ModelPricing{
+			Input:         10.00,
+			Output:        50.00,
+			Cached:        1.00,
+			CacheCreation: 12.50,
+			Reasoning:     50.00,
+			LongContext: &LongContextPricing{
+				Threshold:     272000,
+				Input:         20.00,
+				Output:        75.00,
+				Cached:        2.00,
+				CacheCreation: 25.00,
+				Reasoning:     75.00,
+			},
+		},
+	}
+}
+
+func bedrockMantleGPT55ModelInfo(id string) *ModelInfo {
+	return &ModelInfo{
+		ID:                        id,
+		Object:                    "model",
+		Created:                   1780300800,
+		OwnedBy:                   "bedrock-mantle",
+		Type:                      "openai",
+		DisplayName:               "GPT 5.5",
+		Version:                   "gpt-5.5",
+		Description:               "Frontier reasoning and professional workflow model on Bedrock Mantle.",
+		ContextLength:             272000,
+		MaxCompletionTokens:       128000,
+		SupportedParameters:       []string{"tools"},
+		SupportedInputModalities:  []string{"text", "image"},
+		SupportedOutputModalities: []string{"text"},
+		Thinking:                  &ThinkingSupport{Levels: []string{"none", "low", "medium", "high", "xhigh"}},
+		Pricing: &ModelPricing{
+			Input:         5.50,
+			Output:        33.00,
+			Cached:        0.55,
+			CacheCreation: 5.50,
+			Reasoning:     33.00,
+		},
+	}
+}
+
+func bedrockMantleGPT54ModelInfo(id string) *ModelInfo {
+	return &ModelInfo{
+		ID:                        id,
+		Object:                    "model",
+		Created:                   1780300800,
+		OwnedBy:                   "bedrock-mantle",
+		Type:                      "openai",
+		DisplayName:               "GPT 5.4",
+		Version:                   "gpt-5.4",
+		Description:               "Frontier reasoning and tool-use model on Bedrock Mantle.",
+		ContextLength:             272000,
+		MaxCompletionTokens:       128000,
+		SupportedParameters:       []string{"tools"},
+		SupportedInputModalities:  []string{"text", "image"},
+		SupportedOutputModalities: []string{"text"},
+		Thinking:                  &ThinkingSupport{Levels: []string{"none", "low", "medium", "high"}},
+		Pricing: &ModelPricing{
+			Input:         2.75,
+			Output:        16.50,
+			Cached:        0.275,
+			CacheCreation: 2.75,
+			Reasoning:     16.50,
+		},
+	}
+}
+
+func bedrockMantleCyberModelInfo(id string) *ModelInfo {
+	return &ModelInfo{
+		ID:                        id,
+		Object:                    "model",
+		Created:                   1783616400,
+		OwnedBy:                   "bedrock-mantle",
+		Type:                      "openai",
+		DisplayName:               "Daybreak Red: GPT 5.6 Cyber",
+		Version:                   "gpt-5.6",
+		Description:               "Advanced cybersecurity model on Bedrock Mantle.",
+		ContextLength:             1000000,
+		MaxCompletionTokens:       128000,
+		SupportedParameters:       []string{"tools"},
+		SupportedInputModalities:  []string{"text", "image"},
+		SupportedOutputModalities: []string{"text"},
+		Thinking:                  &ThinkingSupport{Levels: []string{"none", "low", "medium", "high", "xhigh", "max"}},
+		Pricing: &ModelPricing{
+			Input:         13.75,
+			Output:        82.50,
+			Cached:        1.375,
+			CacheCreation: 17.1875,
+			Reasoning:     82.50,
+		},
+	}
+}
+
+func bedrockMantleDaybreakBlueSolModelInfo(id string) *ModelInfo {
+	return &ModelInfo{
+		ID:                        id,
+		Object:                    "model",
+		Created:                   1783616400,
+		OwnedBy:                   "bedrock-mantle",
+		Type:                      "openai",
+		DisplayName:               "Daybreak Blue: GPT 5.6 Sol",
+		Version:                   "gpt-5.6",
+		Description:               "Authorized defender cybersecurity model on Bedrock Mantle.",
+		ContextLength:             1000000,
+		MaxCompletionTokens:       128000,
+		SupportedParameters:       []string{"tools"},
+		SupportedInputModalities:  []string{"text", "image"},
+		SupportedOutputModalities: []string{"text"},
+		Thinking:                  &ThinkingSupport{Levels: []string{"none", "low", "medium", "high", "xhigh", "max"}},
+		Pricing: &ModelPricing{
+			Input:         5.50,
+			Output:        33.00,
+			Cached:        0.55,
+			CacheCreation: 6.875,
+			Reasoning:     33.00,
+			LongContext: &LongContextPricing{
+				Threshold:     272000,
+				Input:         11.00,
+				Output:        49.50,
+				Cached:        1.10,
+				CacheCreation: 13.75,
+				Reasoning:     49.50,
+			},
+		},
+	}
+}
+
+func bedrockMantleOSS120BModelInfo(id string) *ModelInfo {
+	return &ModelInfo{
+		ID:                        id,
+		Object:                    "model",
+		Created:                   1754352000,
+		OwnedBy:                   "bedrock-mantle",
+		Type:                      "openai",
+		DisplayName:               "GPT OSS 120B",
+		Version:                   "gpt-oss",
+		Description:               "Open-source general-purpose 120B parameter model on Bedrock Mantle.",
+		ContextLength:             128000,
+		MaxCompletionTokens:       16000,
+		SupportedParameters:       []string{"tools"},
+		SupportedInputModalities:  []string{"text"},
+		SupportedOutputModalities: []string{"text"},
+	}
+}
+
+func bedrockMantleOSS20BModelInfo(id string) *ModelInfo {
+	return &ModelInfo{
+		ID:                        id,
+		Object:                    "model",
+		Created:                   1754352000,
+		OwnedBy:                   "bedrock-mantle",
+		Type:                      "openai",
+		DisplayName:               "GPT OSS 20B",
+		Version:                   "gpt-oss",
+		Description:               "Open-source compact 20B parameter model on Bedrock Mantle.",
+		ContextLength:             128000,
+		MaxCompletionTokens:       16000,
+		SupportedParameters:       []string{"tools"},
+		SupportedInputModalities:  []string{"text"},
+		SupportedOutputModalities: []string{"text"},
+	}
+}
+
+func bedrockMantleOSSSafeguard120BModelInfo(id string) *ModelInfo {
+	return &ModelInfo{
+		ID:                        id,
+		Object:                    "model",
+		Created:                   1754352000,
+		OwnedBy:                   "bedrock-mantle",
+		Type:                      "openai",
+		DisplayName:               "GPT OSS Safeguard 120B",
+		Version:                   "gpt-oss",
+		Description:               "Open-source safety model for content moderation on Bedrock Mantle.",
+		ContextLength:             128000,
+		MaxCompletionTokens:       16000,
+		SupportedInputModalities:  []string{"text"},
+		SupportedOutputModalities: []string{"text"},
+	}
+}
+
+func bedrockMantleOSSSafeguard20BModelInfo(id string) *ModelInfo {
+	return &ModelInfo{
+		ID:                        id,
+		Object:                    "model",
+		Created:                   1754352000,
+		OwnedBy:                   "bedrock-mantle",
+		Type:                      "openai",
+		DisplayName:               "GPT OSS Safeguard 20B",
+		Version:                   "gpt-oss",
+		Description:               "Open-source compact safety model for moderation on Bedrock Mantle.",
+		ContextLength:             128000,
+		MaxCompletionTokens:       16000,
+		SupportedInputModalities:  []string{"text"},
+		SupportedOutputModalities: []string{"text"},
+	}
+}
+
+// LookupStaticBedrockMantleModelInfo searches static Bedrock Mantle model definitions by ID.
+func LookupStaticBedrockMantleModelInfo(modelID string) *ModelInfo {
+	trimmed := strings.ToLower(strings.TrimSpace(modelID))
+	if trimmed == "" {
+		return nil
+	}
+	stripped := strings.TrimPrefix(trimmed, "openai.")
+	for _, m := range GetBedrockMantleModels() {
+		if m == nil {
+			continue
+		}
+		mID := strings.ToLower(strings.TrimSpace(m.ID))
+		if mID == trimmed || mID == stripped || strings.TrimPrefix(mID, "openai.") == stripped {
+			return cloneModelInfo(m)
+		}
+	}
+	return nil
+}
+
 func upsertModelInfos(models []*ModelInfo, extras ...*ModelInfo) []*ModelInfo {
 	if len(extras) == 0 {
 		return models
@@ -372,6 +739,8 @@ func GetStaticModelDefinitionsByChannel(channel string) []*ModelInfo {
 		return GetAntigravityModels()
 	case "xai", "x-ai", "grok":
 		return GetXAIModels()
+	case "bedrock-mantle", "mantle":
+		return GetBedrockMantleModels()
 	default:
 		return nil
 	}
@@ -394,10 +763,31 @@ func LookupStaticModelInfo(modelID string) *ModelInfo {
 		data.Kimi,
 		data.Antigravity,
 		data.XAI,
+		GetBedrockMantleModels(),
 	}
+	normalizedTarget := strings.ToLower(strings.TrimSpace(modelID))
+	strippedTarget := strings.TrimPrefix(normalizedTarget, "openai.")
+
+	// Exact match pass
 	for _, models := range allModels {
 		for _, m := range models {
-			if m != nil && m.ID == modelID {
+			if m == nil {
+				continue
+			}
+			if strings.ToLower(strings.TrimSpace(m.ID)) == normalizedTarget {
+				return cloneModelInfo(m)
+			}
+		}
+	}
+
+	// Prefix-stripped fallback pass
+	for _, models := range allModels {
+		for _, m := range models {
+			if m == nil {
+				continue
+			}
+			mID := strings.ToLower(strings.TrimSpace(m.ID))
+			if mID == strippedTarget || strings.TrimPrefix(mID, "openai.") == strippedTarget {
 				return cloneModelInfo(m)
 			}
 		}
