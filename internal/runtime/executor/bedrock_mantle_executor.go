@@ -24,6 +24,7 @@ import (
 	cliproxyexecutor "github.com/router-for-me/CLIProxyAPI/v7/sdk/cliproxy/executor"
 	sdktranslator "github.com/router-for-me/CLIProxyAPI/v7/sdk/translator"
 	log "github.com/sirupsen/logrus"
+	"github.com/tidwall/gjson"
 	"github.com/tidwall/sjson"
 )
 
@@ -160,6 +161,11 @@ func (e *BedrockMantleExecutor) sanitizeMantlePayload(payload []byte, modelName 
 	if strings.Contains(m, "gpt-6") || strings.Contains(m, "gpt-5.6") || strings.Contains(m, "astra") {
 		payload, _ = sjson.DeleteBytes(payload, "max_tokens")
 		payload, _ = sjson.DeleteBytes(payload, "max_output_tokens")
+	}
+	if strings.Contains(m, "luna") {
+		if gjson.GetBytes(payload, "tools").Exists() || gjson.GetBytes(payload, "functions").Exists() {
+			payload, _ = sjson.SetBytes(payload, "reasoning_effort", "none")
+		}
 	}
 	return payload
 }

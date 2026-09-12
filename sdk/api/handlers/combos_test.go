@@ -31,3 +31,30 @@ func TestComboFallbackEligible(t *testing.T) {
 		t.Fatal("plain 400 must not be fallback eligible")
 	}
 }
+
+func BenchmarkComboCatalogModels(b *testing.B) {
+	handler := NewBaseAPIHandlers(&sdkconfig.SDKConfig{Combos: []sdkconfig.ComboConfig{
+		{Name: "coding-combo", Models: []string{"claude-3-5-haiku", "gemini-2.0-flash"}, DisplayName: "Coding Combo"},
+		{Name: "research-combo", Models: []string{"gemini-2.0-flash", "claude-3-5-haiku"}, DisplayName: "Research Combo"},
+	}}, nil)
+
+	b.ResetTimer()
+	b.ReportAllocs()
+	for i := 0; i < b.N; i++ {
+		_ = handler.ComboCatalogModels("openai")
+	}
+}
+
+func BenchmarkComboMemberOrder(b *testing.B) {
+	combo := sdkconfig.ComboConfig{
+		Name:     "round-robin-combo",
+		Strategy: "round-robin",
+		Models:   []string{"claude-3-5-haiku", "gemini-2.0-flash", "gpt-4o-mini"},
+	}
+
+	b.ResetTimer()
+	b.ReportAllocs()
+	for i := 0; i < b.N; i++ {
+		_ = comboMemberOrder(combo)
+	}
+}

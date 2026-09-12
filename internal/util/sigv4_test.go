@@ -44,3 +44,21 @@ func TestSignAwsRequest(t *testing.T) {
 		t.Fatalf("unexpected x-amz-security-token: %s", req.Header.Get("x-amz-security-token"))
 	}
 }
+
+func BenchmarkSignAwsRequest(b *testing.B) {
+	req, _ := http.NewRequest("POST", "https://bedrock-mantle.us-east-1.api.aws/openai/v1/chat/completions", nil)
+	req.Header.Set("Content-Type", "application/json")
+	creds := AwsCredentials{
+		AccessKeyID:     "AKIAIOSFODNN7EXAMPLE",
+		SecretAccessKey: "wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY",
+		SessionToken:    "session-token-example",
+	}
+	fixedTime := time.Date(2026, 9, 12, 10, 0, 0, 0, time.UTC)
+	body := []byte(`{"model":"claude-3-5-haiku","messages":[{"role":"user","content":"ping"}]}`)
+
+	b.ResetTimer()
+	b.ReportAllocs()
+	for i := 0; i < b.N; i++ {
+		_ = SignAwsRequest(req, creds, "us-east-1", "bedrock-mantle", body, fixedTime)
+	}
+}
