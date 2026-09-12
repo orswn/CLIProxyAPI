@@ -876,3 +876,44 @@ nonstream-keepalive-interval: 0
 #       params: # JSON paths (gjson/sjson syntax) to remove from the payload
 #         - "generationConfig.thinkingConfig.thinkingBudget"
 #         - "generationConfig.responseJsonSchema"
+
+# Model Combos configuration
+# combos:
+#   - name: "coding"
+#     strategy: "fallback" # options: fallback, round-robin, fusion
+#     models:
+#       - "openai.gpt-6-astra"
+#       - "claude-fable-5.1"
+#   - name: "research-fusion"
+#     strategy: "fusion"
+#     judge-model: "claude-fable-5.1"
+#     models:
+#       - "openai.gpt-6-astra"
+#       - "gemini-3.8-flash"
+
+# AWS Bedrock Mantle configuration
+# bedrock-mantle:
+#   - profile: "boon-bedrock-codex" # AWS profile using SSO session or credentials
+#     default-region: "us-east-1"
+#     model-regions:
+#       "openai.gpt-6-astra": "us-west-2"
+#       "gpt-6-astra": "us-west-2"
+#     models:
+#       - name: "openai.gpt-6-astra"
+#         alias: "gpt-6-astra"
+#       - name: "claude-fable-5.1"
+#       - name: "gemini-3.8-flash"
+#   # Or using explicit IAM credentials:
+#   - access-key-id: "AKIA..."
+#     secret-access-key: "..."
+#     session-token: "" # optional for temporary credentials
+#     default-region: "us-east-1"
+#     model-regions:
+#       "openai.gpt-6-astra": "us-west-2"
+#       "gpt-6-astra": "us-west-2"
+#     models:
+#       - name: "openai.gpt-6-astra"
+#         alias: "gpt-6-astra"
+#       - name: "claude-fable-5.1"
+#       - name: "gemini-3.8-flash"
+

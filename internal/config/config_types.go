@@ -2,6 +2,7 @@ package config
 
 import (
 	"fmt"
+	"strings"
 
 	"github.com/router-for-me/CLIProxyAPI/v7/internal/registry"
 	sdkpluginstore "github.com/router-for-me/CLIProxyAPI/v7/sdk/pluginstore"
@@ -777,3 +778,39 @@ func (m OpenAICompatibilityModel) GetForceMapping() bool    { return m.ForceMapp
 func (m OpenAICompatibilityModel) GetIsCompat() bool        { return m.IsCompat }
 
 func (m OpenAICompatibilityModel) GetThinking() *registry.ThinkingSupport { return m.Thinking }
+
+// BedrockMantleConfig represents the configuration for AWS Bedrock Mantle.
+type BedrockMantleConfig struct {
+	Name            string                     `yaml:"name,omitempty" json:"name,omitempty"`
+	Disabled        bool                       `yaml:"disabled,omitempty" json:"disabled,omitempty"`
+	Profile         string                     `yaml:"profile,omitempty" json:"profile,omitempty"`
+	AccessKeyID     string                     `yaml:"access-key-id,omitempty" json:"access-key-id,omitempty"`
+	SecretAccessKey string                     `yaml:"secret-access-key,omitempty" json:"secret-access-key,omitempty"`
+	SessionToken    string                     `yaml:"session-token,omitempty" json:"session-token,omitempty"`
+	DefaultRegion   string                     `yaml:"default-region,omitempty" json:"default-region,omitempty"`
+	ModelRegions    map[string]string          `yaml:"model-regions,omitempty" json:"model-regions,omitempty"`
+	Models          []OpenAICompatibilityModel `yaml:"models,omitempty" json:"models,omitempty"`
+}
+
+// ResolveRegion returns the AWS region for the specified model.
+// If the model exists in ModelRegions, that region is returned.
+// Otherwise, DefaultRegion is returned, falling back to "us-east-1".
+func (c *BedrockMantleConfig) ResolveRegion(modelName string) string {
+	modelName = strings.TrimSpace(modelName)
+	if c != nil && len(c.ModelRegions) > 0 {
+		if region, ok := c.ModelRegions[modelName]; ok && strings.TrimSpace(region) != "" {
+			return strings.TrimSpace(region)
+		}
+		for k, v := range c.ModelRegions {
+			if strings.EqualFold(strings.TrimSpace(k), modelName) && strings.TrimSpace(v) != "" {
+				return strings.TrimSpace(v)
+			}
+		}
+	}
+	if c != nil && strings.TrimSpace(c.DefaultRegion) != "" {
+		return strings.TrimSpace(c.DefaultRegion)
+	}
+	return "us-east-1"
+}
+
+

@@ -56,6 +56,8 @@ func (s *ConfigSynthesizer) Synthesize(ctx *SynthesisContext) ([]*coreauth.Auth,
 	out = append(out, s.synthesizeOpenAICompat(ctx)...)
 	// Vertex-compat
 	out = append(out, s.synthesizeVertexCompat(ctx)...)
+	// Bedrock Mantle
+	out = append(out, s.synthesizeBedrockMantle(ctx)...)
 
 	return out, nil
 }
@@ -445,6 +447,55 @@ func (s *ConfigSynthesizer) synthesizeVertexCompat(ctx *SynthesisContext) []*cor
 		ApplyAuthExcludedModelsMeta(a, cfg, compat.ExcludedModels, "apikey")
 		if len(a.Metadata) == 0 {
 			a.Metadata = nil
+		}
+		out = append(out, a)
+	}
+	return out
+}
+
+// synthesizeBedrockMantle creates Auth entries for Bedrock Mantle configurations.
+func (s *ConfigSynthesizer) synthesizeBedrockMantle(ctx *SynthesisContext) []*coreauth.Auth {
+	cfg := ctx.Config
+	now := ctx.Now
+	idGen := ctx.IDGenerator
+
+	out := make([]*coreauth.Auth, 0, len(cfg.BedrockMantle))
+	for i := range cfg.BedrockMantle {
+		entry := &cfg.BedrockMantle[i]
+		if entry.Disabled {
+			continue
+		}
+		name := strings.TrimSpace(entry.Name)
+		if name == "" {
+			name = "bedrock-mantle"
+		}
+		keyOrProfile := entry.Profile
+		if keyOrProfile == "" {
+			keyOrProfile = entry.AccessKeyID
+		}
+		id, token := idGen.Next("bedrock-mantle", keyOrProfile, entry.DefaultRegion)
+		attrs := map[string]string{
+			"source":                   fmt.Sprintf("config:bedrock-mantle[%s]", token),
+			"provider_key":             "bedrock-mantle",
+			"config_index":             strconv.Itoa(i),
+			"profile":                  entry.Profile,
+			"access_key_id":            entry.AccessKeyID,
+			"secret_access_key":        entry.SecretAccessKey,
+			"session_token":            entry.SessionToken,
+			"default_region":           entry.DefaultRegion,
+			coreauth.AttributeAuthKind: coreauth.AuthKindAPIKey,
+		}
+		if hash := diff.ComputeOpenAICompatModelsHash(entry.Models); hash != "" {
+			attrs["models_hash"] = hash
+		}
+		a := &coreauth.Auth{
+			ID:         id,
+			Provider:   "bedrock-mantle",
+			Label:      name,
+			Status:     coreauth.StatusActive,
+			Attributes: attrs,
+			CreatedAt:  now,
+			UpdatedAt:  now,
 		}
 		out = append(out, a)
 	}

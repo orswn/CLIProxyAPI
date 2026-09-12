@@ -154,6 +154,10 @@ func (s *Service) registerModelsForAuthWithCache(ctx context.Context, a *coreaut
 			}
 		}
 		models = applyExcludedModels(models, excluded)
+	case "bedrock-mantle":
+		if entry := s.resolveConfigBedrockMantleKey(a); entry != nil && len(entry.Models) > 0 {
+			models = buildBedrockMantleConfigModels(entry)
+		}
 	default:
 		// Handle OpenAI-compatibility providers by name using config
 		if s.cfg != nil {
@@ -480,6 +484,30 @@ func (s *Service) resolveConfigVertexCompatKey(auth *coreauth.Auth) *config.Vert
 		}
 	}
 	return nil
+}
+
+func (s *Service) resolveConfigBedrockMantleKey(auth *coreauth.Auth) *config.BedrockMantleConfig {
+	if auth == nil || s.cfg == nil {
+		return nil
+	}
+	if entry := configEntryForAuthIndex(auth, s.cfg.BedrockMantle); entry != nil {
+		return entry
+	}
+	if len(s.cfg.BedrockMantle) > 0 {
+		return &s.cfg.BedrockMantle[0]
+	}
+	return nil
+}
+
+func buildBedrockMantleConfigModels(entry *config.BedrockMantleConfig) []*ModelInfo {
+	if entry == nil || len(entry.Models) == 0 {
+		return nil
+	}
+	compat := &config.OpenAICompatibility{
+		Name:   "bedrock-mantle",
+		Models: entry.Models,
+	}
+	return buildOpenAICompatibilityConfigModels(compat)
 }
 
 func (s *Service) resolveConfigCodexKey(auth *coreauth.Auth) *config.CodexKey {

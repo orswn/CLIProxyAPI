@@ -202,6 +202,10 @@ func compileAPIKeyModelCapabilitiesForAuth(cfg *internalconfig.Config, auth *Aut
 		if entry := resolveVertexAPIKeyConfig(cfg, auth); entry != nil {
 			compileConfiguredModelCapabilities(out, entry.Models, "gemini")
 		}
+	case "bedrock-mantle":
+		if entry := resolveBedrockMantleConfigForAuth(cfg, auth); entry != nil {
+			compileOpenAICompatibleModelCapabilities(out, entry.Models)
+		}
 	default:
 		providerKey, compatName := "", ""
 		if auth.Attributes != nil {

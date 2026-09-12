@@ -7,6 +7,7 @@ import (
 	"net/http"
 
 	"github.com/router-for-me/CLIProxyAPI/v7/internal/clienterror"
+	"github.com/router-for-me/CLIProxyAPI/v7/internal/config"
 	"github.com/router-for-me/CLIProxyAPI/v7/internal/interfaces"
 	"github.com/router-for-me/CLIProxyAPI/v7/internal/runtime/executor/helps"
 	coreexecutor "github.com/router-for-me/CLIProxyAPI/v7/sdk/cliproxy/executor"
@@ -43,6 +44,35 @@ func (h *BaseAPIHandler) executeWithAuthManager(ctx context.Context, handlerType
 }
 
 func (h *BaseAPIHandler) executeWithAuthManagerFormats(ctx context.Context, entryProtocol, exitProtocol, modelName string, rawJSON []byte, alt string, allowImageModel bool, execOptions modelExecutionOptions) ([]byte, http.Header, *interfaces.ErrorMessage) {
+	if combo, ok := h.comboForModel(modelName); ok && !comboExecutionActive(ctx) {
+		if errCombo := h.validateComboExecution(ctx, combo); errCombo != nil {
+			return nil, nil, errCombo
+		}
+		if combo.Strategy == config.ComboStrategyFusion {
+			return h.executeFusion(ctx, entryProtocol, exitProtocol, combo, rawJSON, alt, allowImageModel, execOptions)
+		}
+		var lastErr *interfaces.ErrorMessage
+		for _, member := range comboMemberOrder(combo) {
+			if errCancelled := comboContextError(ctx); errCancelled != nil {
+				return nil, nil, errCancelled
+			}
+			attemptCtx := comboExecutionContext(ctx)
+			model, memberOptions := comboMemberExecution(member, execOptions)
+			body, headers, err := h.executeWithAuthManagerFormats(attemptCtx, entryProtocol, exitProtocol, model, rewriteComboRequestModel(rawJSON, model), alt, allowImageModel, memberOptions)
+			if err != nil {
+				lastErr = err
+				if comboFallbackEligible(err) {
+					continue
+				}
+				return nil, nil, err
+			}
+			return rewriteComboResponseModel(body, combo.Name), headers, nil
+		}
+		if lastErr != nil {
+			return nil, nil, lastErr
+		}
+		return nil, nil, &interfaces.ErrorMessage{StatusCode: http.StatusServiceUnavailable}
+	}
 	originalRequestedModel := modelName
 	routeDecision := h.applyModelRouter(ctx, entryProtocol, modelName, rawJSON, false, execOptions)
 	responseProtocol := modelExecutionResponseProtocol(entryProtocol, exitProtocol)
@@ -117,6 +147,32 @@ func (h *BaseAPIHandler) ExecuteCountWithAuthManager(ctx context.Context, handle
 }
 
 func (h *BaseAPIHandler) executeCountWithAuthManager(ctx context.Context, handlerType, modelName string, rawJSON []byte, alt string, execOptions modelExecutionOptions) ([]byte, http.Header, *interfaces.ErrorMessage) {
+	if combo, ok := h.comboForModel(modelName); ok && !comboExecutionActive(ctx) {
+		if errCombo := h.validateComboExecution(ctx, combo); errCombo != nil {
+			return nil, nil, errCombo
+		}
+		// Counting never runs panel/judge generation or advances round-robin.
+		var lastErr *interfaces.ErrorMessage
+		for _, member := range combo.Models {
+			if errCancelled := comboContextError(ctx); errCancelled != nil {
+				return nil, nil, errCancelled
+			}
+			model, memberOptions := comboMemberExecution(member, execOptions)
+			body, headers, err := h.executeCountWithAuthManager(comboExecutionContext(ctx), handlerType, model, rewriteComboRequestModel(rawJSON, model), alt, memberOptions)
+			if err != nil {
+				lastErr = err
+				if comboFallbackEligible(err) {
+					continue
+				}
+				return nil, nil, err
+			}
+			return body, headers, nil
+		}
+		if lastErr != nil {
+			return nil, nil, lastErr
+		}
+		return nil, nil, &interfaces.ErrorMessage{StatusCode: http.StatusServiceUnavailable}
+	}
 	originalRequestedModel := modelName
 	routeDecision := h.applyModelRouter(ctx, handlerType, modelName, rawJSON, false, execOptions)
 	if routeDecision.ExecutorPluginID != "" {

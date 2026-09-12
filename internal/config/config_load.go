@@ -186,6 +186,15 @@ func LoadConfigOptional(configFile string, optional bool) (*Config, error) {
 	// Validate raw payload rules and drop invalid entries.
 	cfg.SanitizePayloadRules()
 
+	// Sanitize Bedrock Mantle configurations.
+	cfg.SanitizeBedrockMantle()
+
+	// Sanitize and validate combos.
+	cfg.SanitizeCombos()
+	if err := ValidateCombos(cfg.Combos); err != nil {
+		return nil, err
+	}
+
 	// Return the populated configuration struct.
 	return &cfg, nil
 }

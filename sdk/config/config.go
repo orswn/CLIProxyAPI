@@ -30,6 +30,8 @@ type VertexCompatModel = internalconfig.VertexCompatModel
 type OpenAICompatibility = internalconfig.OpenAICompatibility
 type OpenAICompatibilityAPIKey = internalconfig.OpenAICompatibilityAPIKey
 type OpenAICompatibilityModel = internalconfig.OpenAICompatibilityModel
+type ComboConfig = internalconfig.ComboConfig
+type BedrockMantleConfig = internalconfig.BedrockMantleConfig
 
 type TLS = internalconfig.TLSConfig
 

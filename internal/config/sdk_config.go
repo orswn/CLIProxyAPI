@@ -64,6 +64,12 @@ type SDKConfig struct {
 	// NonStreamKeepAliveInterval controls how often blank lines are emitted for non-streaming responses.
 	// <= 0 disables keep-alives. Value is in seconds.
 	NonStreamKeepAliveInterval int `yaml:"nonstream-keepalive-interval,omitempty" json:"nonstream-keepalive-interval,omitempty"`
+
+	// Combos defines virtual model combo routing rules.
+	Combos []ComboConfig `yaml:"combos,omitempty" json:"combos,omitempty"`
+
+	// BedrockMantle defines AWS Bedrock Mantle configurations.
+	BedrockMantle []BedrockMantleConfig `yaml:"bedrock-mantle,omitempty" json:"bedrock-mantle,omitempty"`
 }
 
 // ClaudeCodeConfig configures Claude Code compatibility behavior.

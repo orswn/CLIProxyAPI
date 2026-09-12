@@ -173,6 +173,39 @@ func (cfg *Config) SanitizeOpenAICompatibility() {
 	cfg.OpenAICompatibility = out
 }
 
+// SanitizeBedrockMantle trims fields and validates Bedrock Mantle entries.
+func (cfg *Config) SanitizeBedrockMantle() {
+	if cfg == nil || len(cfg.BedrockMantle) == 0 {
+		return
+	}
+	out := make([]BedrockMantleConfig, 0, len(cfg.BedrockMantle))
+	for i := range cfg.BedrockMantle {
+		e := cfg.BedrockMantle[i]
+		e.Name = strings.TrimSpace(e.Name)
+		e.Profile = strings.TrimSpace(e.Profile)
+		e.AccessKeyID = strings.TrimSpace(e.AccessKeyID)
+		e.SecretAccessKey = strings.TrimSpace(e.SecretAccessKey)
+		e.SessionToken = strings.TrimSpace(e.SessionToken)
+		e.DefaultRegion = strings.TrimSpace(e.DefaultRegion)
+		if e.DefaultRegion == "" {
+			e.DefaultRegion = "us-east-1"
+		}
+		if len(e.ModelRegions) > 0 {
+			normalized := make(map[string]string, len(e.ModelRegions))
+			for k, v := range e.ModelRegions {
+				kTrim := strings.TrimSpace(k)
+				vTrim := strings.TrimSpace(v)
+				if kTrim != "" && vTrim != "" {
+					normalized[kTrim] = vTrim
+				}
+			}
+			e.ModelRegions = normalized
+		}
+		out = append(out, e)
+	}
+	cfg.BedrockMantle = out
+}
+
 // SanitizeCodexKeys removes Codex API key entries missing a BaseURL.
 // It trims whitespace and preserves order for remaining entries.
 func (cfg *Config) SanitizeCodexKeys() {

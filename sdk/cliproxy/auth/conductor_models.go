@@ -748,6 +748,8 @@ func (m *Manager) applyAPIKeyModelAliasWithRouting(routing *apiKeyModelRoutingSn
 		upstreamModel = resolveUpstreamModelForXAIAPIKey(cfg, auth, requestedModel)
 	case "vertex":
 		upstreamModel = resolveUpstreamModelForVertexAPIKey(cfg, auth, requestedModel)
+	case "bedrock-mantle":
+		upstreamModel = resolveUpstreamModelForBedrockMantle(cfg, auth, requestedModel)
 	default:
 		upstreamModel = resolveUpstreamModelForOpenAICompatAPIKey(cfg, auth, requestedModel)
 	}
@@ -897,6 +899,28 @@ func resolveUpstreamModelForXAIAPIKey(cfg *internalconfig.Config, auth *Auth, re
 
 func resolveUpstreamModelForVertexAPIKey(cfg *internalconfig.Config, auth *Auth, requestedModel string) string {
 	entry := resolveVertexAPIKeyConfig(cfg, auth)
+	if entry == nil {
+		return ""
+	}
+	return resolveModelAliasFromConfigModels(requestedModel, asModelAliasEntries(entry.Models))
+}
+
+func resolveBedrockMantleConfigForAuth(cfg *internalconfig.Config, auth *Auth) *internalconfig.BedrockMantleConfig {
+	if cfg == nil || len(cfg.BedrockMantle) == 0 {
+		return nil
+	}
+	if auth != nil && auth.Attributes != nil {
+		if idxStr, ok := auth.Attributes["config_index"]; ok {
+			if idx, err := strconv.Atoi(strings.TrimSpace(idxStr)); err == nil && idx >= 0 && idx < len(cfg.BedrockMantle) {
+				return &cfg.BedrockMantle[idx]
+			}
+		}
+	}
+	return &cfg.BedrockMantle[0]
+}
+
+func resolveUpstreamModelForBedrockMantle(cfg *internalconfig.Config, auth *Auth, requestedModel string) string {
+	entry := resolveBedrockMantleConfigForAuth(cfg, auth)
 	if entry == nil {
 		return ""
 	}
