@@ -24,12 +24,11 @@ import (
 	cliproxyexecutor "github.com/router-for-me/CLIProxyAPI/v7/sdk/cliproxy/executor"
 	sdktranslator "github.com/router-for-me/CLIProxyAPI/v7/sdk/translator"
 	log "github.com/sirupsen/logrus"
-	"github.com/tidwall/gjson"
 	"github.com/tidwall/sjson"
 )
 
 // BedrockMantleExecutor implements execution against AWS Bedrock Mantle
-// OpenAI-compatible chat completion endpoints signed with AWS SigV4.
+// OpenAI-compatible endpoints signed with AWS SigV4.
 type BedrockMantleExecutor struct {
 	cfg           *config.Config
 	credMu        sync.RWMutex
@@ -68,6 +67,31 @@ func NewBedrockMantleExecutor(cfg *config.Config) *BedrockMantleExecutor {
 
 // Identifier implements cliproxyauth.ProviderExecutor.
 func (e *BedrockMantleExecutor) Identifier() string { return "bedrock-mantle" }
+
+// RequestToFormat reports the upstream request format used after auth selection.
+func (e *BedrockMantleExecutor) RequestToFormat(_ cliproxyexecutor.Request, opts cliproxyexecutor.Options) sdktranslator.Format {
+	if opts.SourceFormat == sdktranslator.FormatOpenAIResponse {
+		return sdktranslator.FormatOpenAIResponse
+	}
+	return sdktranslator.FormatOpenAI
+}
+
+func bedrockMantleEndpointURL(region string, format sdktranslator.Format) string {
+	path := "chat/completions"
+	if format == sdktranslator.FormatOpenAIResponse {
+		path = "responses"
+	}
+	return fmt.Sprintf("https://bedrock-mantle.%s.api.aws/openai/v1/%s", region, path)
+}
+
+func isBedrockMantleResponsesTerminalEvent(eventName string) bool {
+	switch eventName {
+	case "response.completed", "response.incomplete", "response.failed":
+		return true
+	default:
+		return false
+	}
+}
 
 func (e *BedrockMantleExecutor) resolveCredentials(ctx context.Context, auth *cliproxyauth.Auth) (util.AwsCredentials, error) {
 	var profile, ak, sk, st string
@@ -162,11 +186,6 @@ func (e *BedrockMantleExecutor) sanitizeMantlePayload(payload []byte, modelName 
 		payload, _ = sjson.DeleteBytes(payload, "max_tokens")
 		payload, _ = sjson.DeleteBytes(payload, "max_output_tokens")
 	}
-	if strings.Contains(m, "luna") {
-		if gjson.GetBytes(payload, "tools").Exists() || gjson.GetBytes(payload, "functions").Exists() {
-			payload, _ = sjson.SetBytes(payload, "reasoning_effort", "none")
-		}
-	}
 	return payload
 }
 
@@ -206,11 +225,10 @@ func (e *BedrockMantleExecutor) Execute(ctx context.Context, auth *cliproxyauth.
 	}
 
 	region := e.resolveRegion(auth, baseModel)
-	endpointURL := fmt.Sprintf("https://bedrock-mantle.%s.api.aws/openai/v1/chat/completions", region)
-
 	from := opts.SourceFormat
 	responseFormat := cliproxyexecutor.ResponseFormatOrSource(opts)
-	to := sdktranslator.FromString("openai")
+	to := e.RequestToFormat(req, opts)
+	endpointURL := bedrockMantleEndpointURL(region, to)
 
 	originalPayloadSource := req.Payload
 	if len(opts.OriginalRequest) > 0 {
@@ -319,11 +337,10 @@ func (e *BedrockMantleExecutor) ExecuteStream(ctx context.Context, auth *cliprox
 	}
 
 	region := e.resolveRegion(auth, baseModel)
-	endpointURL := fmt.Sprintf("https://bedrock-mantle.%s.api.aws/openai/v1/chat/completions", region)
-
 	from := opts.SourceFormat
 	responseFormat := cliproxyexecutor.ResponseFormatOrSource(opts)
-	to := sdktranslator.FromString("openai")
+	to := e.RequestToFormat(req, opts)
+	endpointURL := bedrockMantleEndpointURL(region, to)
 
 	originalPayloadSource := req.Payload
 	if len(opts.OriginalRequest) > 0 {
@@ -344,8 +361,9 @@ func (e *BedrockMantleExecutor) ExecuteStream(ctx context.Context, auth *cliprox
 	translated = helps.ApplyPayloadConfigWithRequest(e.cfg, baseModel, to.String(), from.String(), "", translated, originalTranslated, requestedModel, requestPath, opts.Headers)
 	translated = e.sanitizeMantlePayload(translated, baseModel)
 
-	// Ensure stream_options.include_usage = true
-	translated = helps.SetBoolIfDifferent(translated, "stream_options.include_usage", true)
+	if to == sdktranslator.FormatOpenAI {
+		translated = helps.SetBoolIfDifferent(translated, "stream_options.include_usage", true)
+	}
 	reporter.SetTranslatedReasoningEffort(translated, to.String())
 
 	httpReq, err := http.NewRequestWithContext(ctx, http.MethodPost, endpointURL, bytes.NewReader(translated))
@@ -468,6 +486,11 @@ func (e *BedrockMantleExecutor) ExecuteStream(ctx context.Context, auth *cliprox
 					publishStreamError(streamErr, true)
 					return true
 				}
+				if to == sdktranslator.FormatOpenAIResponse {
+					if usage, ok := helps.ParseCodexUsage(dataPayload); ok {
+						streamUsage.Observe(usage, true)
+					}
+				}
 			}
 
 			streamLine := append([]byte("data: "), dataPayload...)
@@ -480,7 +503,7 @@ func (e *BedrockMantleExecutor) ExecuteStream(ctx context.Context, auth *cliprox
 					return true
 				}
 			}
-			if isDone {
+			if isDone || (to == sdktranslator.FormatOpenAIResponse && isBedrockMantleResponsesTerminalEvent(eventName)) {
 				seenDone = true
 				return true
 			}
