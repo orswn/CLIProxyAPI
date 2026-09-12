@@ -10,7 +10,10 @@ import (
 	"github.com/tidwall/sjson"
 )
 
-const openAIToolResultImageOmittedText = "[image omitted: unsupported by upstream]"
+const (
+	openAIToolResultImageOmittedText = "[image omitted: unsupported by upstream]"
+	openAIToolResultImageRelayText   = "Images returned by the preceding tool call(s):"
+)
 
 // ShouldNormalizeOpenAIToolResultsForModel reports whether the selected model
 // explicitly excludes image input through its input-modalities configuration.
@@ -49,7 +52,65 @@ func NormalizeOpenAIToolResultsTextOnly(payload []byte) []byte {
 		messageIndex++
 		return true
 	})
-	return out
+	return removeOpenAIToolResultImageRelays(out)
+}
+
+func removeOpenAIToolResultImageRelays(payload []byte) []byte {
+	messages := gjson.GetBytes(payload, "messages")
+	if !messages.Exists() || !messages.IsArray() {
+		return payload
+	}
+
+	normalized := make([]string, 0, len(messages.Array()))
+	changed := false
+	messages.ForEach(func(_, message gjson.Result) bool {
+		if isOpenAIToolResultImageRelay(message) && len(normalized) > 0 {
+			previous := gjson.Parse(normalized[len(normalized)-1])
+			if previous.Get("role").String() == "tool" {
+				content := previous.Get("content").String()
+				if content != "" {
+					content += "\n\n"
+				}
+				content += openAIToolResultImageOmittedText
+				if updated, errSet := sjson.Set(previous.Raw, "content", content); errSet == nil {
+					normalized[len(normalized)-1] = updated
+					changed = true
+					return true
+				}
+			}
+		}
+		normalized = append(normalized, message.Raw)
+		return true
+	})
+	if !changed {
+		return payload
+	}
+
+	updated, errSet := sjson.SetRawBytes(payload, "messages", []byte("["+strings.Join(normalized, ",")+"]"))
+	if errSet != nil {
+		return payload
+	}
+	return updated
+}
+
+func isOpenAIToolResultImageRelay(message gjson.Result) bool {
+	if message.Get("role").String() != "user" {
+		return false
+	}
+	content := message.Get("content")
+	if !content.IsArray() {
+		return false
+	}
+	parts := content.Array()
+	if len(parts) < 2 || parts[0].Get("type").String() != "text" || parts[0].Get("text").String() != openAIToolResultImageRelayText {
+		return false
+	}
+	for _, part := range parts[1:] {
+		if isOpenAIImageToolResultPart(part) {
+			return true
+		}
+	}
+	return false
 }
 
 func openAICompatibilityModelExcludesImages(models []config.OpenAICompatibilityModel, model string) (bool, bool) {

@@ -38,6 +38,26 @@ func TestNormalizeOpenAIToolResultsTextOnly(t *testing.T) {
 	}
 }
 
+func TestNormalizeOpenAIToolResultsTextOnlyRemovesRelayedImages(t *testing.T) {
+	input := []byte(`{"messages":[
+		{"role":"tool","tool_call_id":"call_1","content":"image inspected"},
+		{"role":"user","content":[
+			{"type":"text","text":"Images returned by the preceding tool call(s):"},
+			{"type":"image_url","image_url":{"url":"data:image/png;base64,AA=="}}
+		]}
+	]}`)
+
+	got := NormalizeOpenAIToolResultsTextOnly(input)
+
+	if count := gjson.GetBytes(got, "messages.#").Int(); count != 1 {
+		t.Fatalf("message count = %d, want 1; body=%s", count, got)
+	}
+	want := "image inspected\n\n" + openAIToolResultImageOmittedText
+	if content := gjson.GetBytes(got, "messages.0.content").String(); content != want {
+		t.Fatalf("tool content = %q, want %q", content, want)
+	}
+}
+
 func TestNormalizeOpenAIToolResultsTextOnlyImageAndUnknownContent(t *testing.T) {
 	tests := []struct {
 		name  string
