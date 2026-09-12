@@ -302,6 +302,17 @@ func (h *Handler) PatchAuthFileFields(c *gin.Context) {
 		c.JSON(http.StatusConflict, gin.H{"error": errPluginVirtualAuth.Error()})
 		return
 	}
+	if targetAuth.Provider == mantleProvider {
+		regionsChanged, errRegions := normalizeMantleRegionPatch(req)
+		if errRegions != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": errRegions.Error()})
+			return
+		}
+		if regionsChanged {
+			// Persist current metadata, not the token storage's older region settings.
+			targetAuth.Storage = nil
+		}
+	}
 	coreauth.NormalizeCredentialMetadata(targetAuth.Metadata)
 
 	changed := false

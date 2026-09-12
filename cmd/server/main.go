@@ -83,6 +83,21 @@ func main() {
 	var xaiLogin bool
 	var vertexImport string
 	var vertexImportPrefix string
+	var mantleLogin bool
+	var mantleAddKey bool
+	var mantleImportProfile string
+	var mantleProfile string
+	var mantlePrefix string
+	var mantleRegion string
+	var mantleStartURL string
+	var mantleSSORegion string
+	var mantleAccountID string
+	var mantleRoleName string
+	var mantleRoleARN string
+	var mantleAccessKey string
+	var mantleSecretKey string
+	var mantleSessionToken string
+	var mantleAWSDir string
 	var configPath string
 	var password string
 	var homeJWT string
@@ -103,6 +118,21 @@ func main() {
 	flag.StringVar(&configPath, "config", DefaultConfigPath, "Configure File Path")
 	flag.StringVar(&vertexImport, "vertex-import", "", "Import Vertex service account key JSON file")
 	flag.StringVar(&vertexImportPrefix, "vertex-import-prefix", "", "Prefix for Vertex model namespacing (use with -vertex-import)")
+	flag.BoolVar(&mantleLogin, "mantle-login", false, "Login to Bedrock Mantle via AWS IAM Identity Center device flow")
+	flag.BoolVar(&mantleAddKey, "mantle-add-key", false, "Add Bedrock Mantle credential from static AWS access keys (-mantle-access-key, -mantle-secret-key)")
+	flag.StringVar(&mantleImportProfile, "mantle-import-profile", "", "Import an AWS profile from ~/.aws as an embedded Bedrock Mantle credential (SSO profiles run device login)")
+	flag.StringVar(&mantleProfile, "mantle-profile", "", "Reference an AWS profile at runtime without embedding (host must have ~/.aws)")
+	flag.StringVar(&mantlePrefix, "mantle-prefix", "", "Model prefix for the Bedrock Mantle credential (e.g. work)")
+	flag.StringVar(&mantleRegion, "mantle-region", "", "Default Bedrock region (default us-east-1)")
+	flag.StringVar(&mantleStartURL, "mantle-start-url", "", "IAM Identity Center start URL (use with -mantle-login)")
+	flag.StringVar(&mantleSSORegion, "mantle-sso-region", "", "IAM Identity Center region (default us-east-1)")
+	flag.StringVar(&mantleAccountID, "mantle-account-id", "", "AWS account ID to select (skips the account picker)")
+	flag.StringVar(&mantleRoleName, "mantle-role-name", "", "IAM Identity Center permission set / role name (skips the role picker)")
+	flag.StringVar(&mantleRoleARN, "mantle-role-arn", "", "Optional IAM role ARN to assume on top of the base credentials")
+	flag.StringVar(&mantleAccessKey, "mantle-access-key", "", "AWS access key ID (use with -mantle-add-key)")
+	flag.StringVar(&mantleSecretKey, "mantle-secret-key", "", "AWS secret access key (use with -mantle-add-key)")
+	flag.StringVar(&mantleSessionToken, "mantle-session-token", "", "AWS session token (optional, use with -mantle-add-key)")
+	flag.StringVar(&mantleAWSDir, "mantle-aws-dir", "", "Override ~/.aws directory for -mantle-import-profile / -mantle-profile")
 	flag.StringVar(&password, "password", "", "")
 	flag.StringVar(&homeJWT, "home-jwt", "", "Home control plane JWT for mTLS certificate bootstrap and connection")
 	flag.BoolVar(&homeDisableClusterDiscovery, "home-disable-cluster-discovery", false, "Disable Home CLUSTER NODES discovery and keep using the configured -home-jwt address")
@@ -588,7 +618,8 @@ func main() {
 		CallbackPort: oauthCallbackPort,
 	}
 
-	commandMode := vertexImport != "" || antigravityLogin || codexLogin || codexDeviceLogin || claudeLogin || kimiLogin || xaiLogin
+	mantleCommand := mantleLogin || mantleAddKey || mantleImportProfile != "" || mantleProfile != ""
+	commandMode := vertexImport != "" || antigravityLogin || codexLogin || codexDeviceLogin || claudeLogin || kimiLogin || xaiLogin || mantleCommand
 	cloudConfigMissing := isCloudDeploy && !configFileExists
 	homeMode := configLoadedFromHome || (cfg != nil && cfg.Home.Enabled)
 	exampleAPIKeySafeMode := shouldEnableExampleAPIKeySafeMode(cfg, commandMode, tuiMode, standalone, cloudConfigMissing, homeMode)
@@ -662,6 +693,33 @@ func main() {
 		cmd.DoKimiLogin(cfg, options)
 	} else if xaiLogin {
 		cmd.DoXAILogin(cfg, options)
+	} else if mantleCommand {
+		mantleOpts := &cmd.MantleLoginOptions{
+			Prefix:    mantlePrefix,
+			Region:    mantleRegion,
+			StartURL:  mantleStartURL,
+			SSORegion: mantleSSORegion,
+			AccountID: mantleAccountID,
+			RoleName:  mantleRoleName,
+			RoleARN:   mantleRoleARN,
+			AccessKey: mantleAccessKey,
+			SecretKey: mantleSecretKey,
+			Session:   mantleSessionToken,
+			AWSDir:    mantleAWSDir,
+		}
+		switch {
+		case mantleAddKey:
+			mantleOpts.Mode = "static"
+		case mantleImportProfile != "":
+			mantleOpts.Mode = "import"
+			mantleOpts.Profile = mantleImportProfile
+		case mantleProfile != "":
+			mantleOpts.Mode = "profile"
+			mantleOpts.Profile = mantleProfile
+		default:
+			mantleOpts.Mode = "sso"
+		}
+		cmd.DoBedrockMantleLogin(cfg, options, mantleOpts)
 	} else {
 		// In cloud deploy mode without config file, just wait for shutdown signals
 		if isCloudDeploy && !configFileExists {

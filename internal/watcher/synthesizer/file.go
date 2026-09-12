@@ -150,7 +150,9 @@ func synthesizeFileAuths(ctx *SynthesisContext, fullPath string, data []byte) ([
 		return nil, nil
 	}
 	label := provider
-	if email, _ := metadata["email"].(string); email != "" {
+	if custom, _ := metadata["label"].(string); strings.TrimSpace(custom) != "" {
+		label = strings.TrimSpace(custom)
+	} else if email, _ := metadata["email"].(string); email != "" {
 		label = email
 	}
 	// Use relative path under authDir as ID to stay consistent with the file-based token store.

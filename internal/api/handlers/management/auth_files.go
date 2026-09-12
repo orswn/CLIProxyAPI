@@ -341,6 +341,9 @@ func (h *Handler) buildAuthFileEntryLocked(auth *coreauth.Auth) gin.H {
 		"source":         "memory",
 		"size":           int64(0),
 	}
+	if mantle := mantlePublicMetadata(auth); mantle != nil {
+		entry["bedrock_mantle"] = mantle
+	}
 	entry["success"] = auth.Success
 	entry["failed"] = auth.Failed
 	entry["recent_requests"] = auth.RecentRequestsSnapshot(time.Now())

@@ -782,8 +782,11 @@ func (m OpenAICompatibilityModel) GetThinking() *registry.ThinkingSupport { retu
 // BedrockMantleConfig represents the configuration for AWS Bedrock Mantle.
 type BedrockMantleConfig struct {
 	Name            string                     `yaml:"name,omitempty" json:"name,omitempty"`
+	Prefix          string                     `yaml:"prefix,omitempty" json:"prefix,omitempty"`
 	Disabled        bool                       `yaml:"disabled,omitempty" json:"disabled,omitempty"`
 	Profile         string                     `yaml:"profile,omitempty" json:"profile,omitempty"`
+	AWSDir          string                     `yaml:"aws-dir,omitempty" json:"aws-dir,omitempty"`
+	RoleARN         string                     `yaml:"role-arn,omitempty" json:"role-arn,omitempty"`
 	AccessKeyID     string                     `yaml:"access-key-id,omitempty" json:"access-key-id,omitempty"`
 	SecretAccessKey string                     `yaml:"secret-access-key,omitempty" json:"secret-access-key,omitempty"`
 	SessionToken    string                     `yaml:"session-token,omitempty" json:"session-token,omitempty"`
@@ -791,6 +794,8 @@ type BedrockMantleConfig struct {
 	ModelRegions    map[string]string          `yaml:"model-regions,omitempty" json:"model-regions,omitempty"`
 	Models          []OpenAICompatibilityModel `yaml:"models,omitempty" json:"models,omitempty"`
 }
+
+func (c BedrockMantleConfig) GetPrefix() string { return c.Prefix }
 
 // ResolveRegion returns the AWS region for the specified model.
 // If the model exists in ModelRegions, that region is returned.
@@ -812,5 +817,3 @@ func (c *BedrockMantleConfig) ResolveRegion(modelName string) string {
 	}
 	return "us-east-1"
 }
-
-

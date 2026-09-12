@@ -179,6 +179,10 @@ func (s *Server) registerManagementRoutes() {
 		mgmt.GET("/antigravity-auth-url", s.mgmt.RequestAntigravityToken)
 		mgmt.GET("/kimi-auth-url", s.mgmt.RequestKimiToken)
 		mgmt.GET("/xai-auth-url", s.mgmt.RequestXAIToken)
+		mgmt.GET("/bedrock-mantle-auth-url", s.mgmt.RequestBedrockMantleToken)
+		mgmt.GET("/bedrock-mantle-choices", s.mgmt.GetBedrockMantleChoices)
+		mgmt.POST("/bedrock-mantle-select", s.mgmt.SelectBedrockMantleTarget)
+		mgmt.POST("/bedrock-mantle-key", s.mgmt.AddBedrockMantleKey)
 		mgmt.GET("/get-auth-status", s.mgmt.GetAuthStatus)
 		mgmt.DELETE("/oauth-session", s.mgmt.CancelAuthSession)
 	}

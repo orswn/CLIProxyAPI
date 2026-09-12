@@ -6,15 +6,15 @@ import (
 
 func TestLookupStaticBedrockMantleModelInfo(t *testing.T) {
 	tests := []struct {
-		modelID             string
-		wantID              string
-		wantContextLength   int
-		wantMaxOutput       int
-		wantReasoning       bool
-		wantPricingInput    float64
-		wantPricingOutput   float64
-		wantLongThreshold   int
-		wantLongInput       float64
+		modelID           string
+		wantID            string
+		wantContextLength int
+		wantMaxOutput     int
+		wantReasoning     bool
+		wantPricingInput  float64
+		wantPricingOutput float64
+		wantLongThreshold int
+		wantLongInput     float64
 	}{
 		{
 			modelID:           "openai.gpt-5.6-luna",

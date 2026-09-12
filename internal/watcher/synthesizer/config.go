@@ -473,7 +473,7 @@ func (s *ConfigSynthesizer) synthesizeBedrockMantle(ctx *SynthesisContext) []*co
 		if keyOrProfile == "" {
 			keyOrProfile = entry.AccessKeyID
 		}
-		id, token := idGen.Next("bedrock-mantle", keyOrProfile, entry.DefaultRegion)
+		id, token := idGen.Next("bedrock-mantle", keyOrProfile, entry.RoleARN, entry.DefaultRegion, entry.Prefix)
 		attrs := map[string]string{
 			"source":                   fmt.Sprintf("config:bedrock-mantle[%s]", token),
 			"provider_key":             "bedrock-mantle",
@@ -482,6 +482,8 @@ func (s *ConfigSynthesizer) synthesizeBedrockMantle(ctx *SynthesisContext) []*co
 			"access_key_id":            entry.AccessKeyID,
 			"secret_access_key":        entry.SecretAccessKey,
 			"session_token":            entry.SessionToken,
+			"aws_dir":                  entry.AWSDir,
+			"role_arn":                 entry.RoleARN,
 			"default_region":           entry.DefaultRegion,
 			coreauth.AttributeAuthKind: coreauth.AuthKindAPIKey,
 		}
@@ -492,6 +494,7 @@ func (s *ConfigSynthesizer) synthesizeBedrockMantle(ctx *SynthesisContext) []*co
 			ID:         id,
 			Provider:   "bedrock-mantle",
 			Label:      name,
+			Prefix:     entry.Prefix,
 			Status:     coreauth.StatusActive,
 			Attributes: attrs,
 			CreatedAt:  now,

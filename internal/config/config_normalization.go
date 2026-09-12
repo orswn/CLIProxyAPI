@@ -182,6 +182,7 @@ func (cfg *Config) SanitizeBedrockMantle() {
 	for i := range cfg.BedrockMantle {
 		e := cfg.BedrockMantle[i]
 		e.Name = strings.TrimSpace(e.Name)
+		e.Prefix = strings.Trim(strings.TrimSpace(e.Prefix), "/")
 		e.Profile = strings.TrimSpace(e.Profile)
 		e.AccessKeyID = strings.TrimSpace(e.AccessKeyID)
 		e.SecretAccessKey = strings.TrimSpace(e.SecretAccessKey)

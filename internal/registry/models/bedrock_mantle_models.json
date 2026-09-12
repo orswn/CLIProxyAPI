@@ -1,0 +1,381 @@
+[
+  {
+    "id": "openai.gpt-5.6-luna",
+    "display_name": "GPT 5.6 Luna",
+    "version": "gpt-5.6",
+    "description": "Fast and affordable agentic coding model on Bedrock Mantle.",
+    "context_length": 1000000,
+    "max_completion_tokens": 128000,
+    "supported_parameters": [
+      "tools"
+    ],
+    "supportedInputModalities": [
+      "text",
+      "image"
+    ],
+    "supportedOutputModalities": [
+      "text"
+    ],
+    "thinking": {
+      "levels": [
+        "none",
+        "low",
+        "medium",
+        "high",
+        "xhigh",
+        "max"
+      ]
+    },
+    "pricing": {
+      "input": 0.22,
+      "output": 1.32,
+      "cached": 0.022,
+      "cache_creation": 0.275,
+      "reasoning": 1.32,
+      "long_context": {
+        "threshold": 272000,
+        "input": 0.44,
+        "output": 1.98,
+        "cached": 0.044,
+        "cache_creation": 0.55,
+        "reasoning": 1.98
+      }
+    }
+  },
+  {
+    "id": "openai.gpt-5.6-terra",
+    "display_name": "GPT 5.6 Terra",
+    "version": "gpt-5.6",
+    "description": "Balanced agentic coding model for everyday work on Bedrock Mantle.",
+    "context_length": 1000000,
+    "max_completion_tokens": 128000,
+    "supported_parameters": [
+      "tools"
+    ],
+    "supportedInputModalities": [
+      "text",
+      "image"
+    ],
+    "supportedOutputModalities": [
+      "text"
+    ],
+    "thinking": {
+      "levels": [
+        "none",
+        "low",
+        "medium",
+        "high",
+        "xhigh",
+        "max"
+      ]
+    },
+    "pricing": {
+      "input": 2.2,
+      "output": 13.2,
+      "cached": 0.22,
+      "cache_creation": 2.75,
+      "reasoning": 13.2,
+      "long_context": {
+        "threshold": 272000,
+        "input": 4.4,
+        "output": 19.8,
+        "cached": 0.44,
+        "cache_creation": 5.5,
+        "reasoning": 19.8
+      }
+    }
+  },
+  {
+    "id": "openai.gpt-5.6-sol",
+    "display_name": "GPT 5.6 Sol",
+    "version": "gpt-5.6",
+    "description": "Frontier reasoning and agentic coding model on Bedrock Mantle.",
+    "context_length": 1000000,
+    "max_completion_tokens": 128000,
+    "supported_parameters": [
+      "tools"
+    ],
+    "supportedInputModalities": [
+      "text",
+      "image"
+    ],
+    "supportedOutputModalities": [
+      "text"
+    ],
+    "thinking": {
+      "levels": [
+        "none",
+        "low",
+        "medium",
+        "high",
+        "xhigh",
+        "max"
+      ]
+    },
+    "pricing": {
+      "input": 4.4,
+      "output": 22.0,
+      "cached": 0.44,
+      "cache_creation": 5.5,
+      "reasoning": 22.0,
+      "long_context": {
+        "threshold": 272000,
+        "input": 8.8,
+        "output": 33.0,
+        "cached": 0.88,
+        "cache_creation": 11.0,
+        "reasoning": 33.0
+      }
+    }
+  },
+  {
+    "id": "openai.gpt-6-astra",
+    "display_name": "GPT 6.0 Astra",
+    "version": "gpt-6",
+    "description": "Frontier reasoning and coding model on Bedrock Mantle.",
+    "context_length": 1050000,
+    "max_completion_tokens": 128000,
+    "supported_parameters": [
+      "tools"
+    ],
+    "supportedInputModalities": [
+      "text",
+      "image"
+    ],
+    "supportedOutputModalities": [
+      "text"
+    ],
+    "thinking": {
+      "levels": [
+        "none",
+        "low",
+        "medium",
+        "high",
+        "xhigh",
+        "ultra"
+      ]
+    },
+    "pricing": {
+      "input": 10.0,
+      "output": 50.0,
+      "cached": 1.0,
+      "cache_creation": 12.5,
+      "reasoning": 50.0,
+      "long_context": {
+        "threshold": 272000,
+        "input": 20.0,
+        "output": 75.0,
+        "cached": 2.0,
+        "cache_creation": 25.0,
+        "reasoning": 75.0
+      }
+    }
+  },
+  {
+    "id": "openai.gpt-5.5",
+    "display_name": "GPT 5.5",
+    "version": "gpt-5.5",
+    "description": "Frontier reasoning and professional workflow model on Bedrock Mantle.",
+    "context_length": 272000,
+    "max_completion_tokens": 128000,
+    "supported_parameters": [
+      "tools"
+    ],
+    "supportedInputModalities": [
+      "text",
+      "image"
+    ],
+    "supportedOutputModalities": [
+      "text"
+    ],
+    "thinking": {
+      "levels": [
+        "none",
+        "low",
+        "medium",
+        "high",
+        "xhigh"
+      ]
+    },
+    "pricing": {
+      "input": 5.5,
+      "output": 33.0,
+      "cached": 0.55,
+      "cache_creation": 5.5,
+      "reasoning": 33.0
+    }
+  },
+  {
+    "id": "openai.gpt-5.4",
+    "display_name": "GPT 5.4",
+    "version": "gpt-5.4",
+    "description": "Frontier reasoning and tool-use model on Bedrock Mantle.",
+    "context_length": 272000,
+    "max_completion_tokens": 128000,
+    "supported_parameters": [
+      "tools"
+    ],
+    "supportedInputModalities": [
+      "text",
+      "image"
+    ],
+    "supportedOutputModalities": [
+      "text"
+    ],
+    "thinking": {
+      "levels": [
+        "none",
+        "low",
+        "medium",
+        "high"
+      ]
+    },
+    "pricing": {
+      "input": 2.75,
+      "output": 16.5,
+      "cached": 0.275,
+      "cache_creation": 2.75,
+      "reasoning": 16.5
+    }
+  },
+  {
+    "id": "openai.gpt-5.6-cyber",
+    "display_name": "Daybreak Red: GPT 5.6 Cyber",
+    "version": "gpt-5.6",
+    "description": "Advanced cybersecurity model on Bedrock Mantle.",
+    "context_length": 1000000,
+    "max_completion_tokens": 128000,
+    "supported_parameters": [
+      "tools"
+    ],
+    "supportedInputModalities": [
+      "text",
+      "image"
+    ],
+    "supportedOutputModalities": [
+      "text"
+    ],
+    "thinking": {
+      "levels": [
+        "none",
+        "low",
+        "medium",
+        "high",
+        "xhigh",
+        "max"
+      ]
+    },
+    "pricing": {
+      "input": 13.75,
+      "output": 82.5,
+      "cached": 1.375,
+      "cache_creation": 17.1875,
+      "reasoning": 82.5
+    }
+  },
+  {
+    "id": "openai.gpt-daybreak-blue-5.6-sol",
+    "display_name": "Daybreak Blue: GPT 5.6 Sol",
+    "version": "gpt-5.6",
+    "description": "Authorized defender cybersecurity model on Bedrock Mantle.",
+    "context_length": 1000000,
+    "max_completion_tokens": 128000,
+    "supported_parameters": [
+      "tools"
+    ],
+    "supportedInputModalities": [
+      "text",
+      "image"
+    ],
+    "supportedOutputModalities": [
+      "text"
+    ],
+    "thinking": {
+      "levels": [
+        "none",
+        "low",
+        "medium",
+        "high",
+        "xhigh",
+        "max"
+      ]
+    },
+    "pricing": {
+      "input": 5.5,
+      "output": 33.0,
+      "cached": 0.55,
+      "cache_creation": 6.875,
+      "reasoning": 33.0,
+      "long_context": {
+        "threshold": 272000,
+        "input": 11.0,
+        "output": 49.5,
+        "cached": 1.1,
+        "cache_creation": 13.75,
+        "reasoning": 49.5
+      }
+    }
+  },
+  {
+    "id": "openai.gpt-oss-120b",
+    "display_name": "GPT OSS 120B",
+    "version": "gpt-oss",
+    "description": "Open-source general-purpose 120B parameter model on Bedrock Mantle.",
+    "context_length": 128000,
+    "max_completion_tokens": 16000,
+    "supported_parameters": [
+      "tools"
+    ],
+    "supportedInputModalities": [
+      "text"
+    ],
+    "supportedOutputModalities": [
+      "text"
+    ]
+  },
+  {
+    "id": "openai.gpt-oss-20b",
+    "display_name": "GPT OSS 20B",
+    "version": "gpt-oss",
+    "description": "Open-source compact 20B parameter model on Bedrock Mantle.",
+    "context_length": 128000,
+    "max_completion_tokens": 16000,
+    "supported_parameters": [
+      "tools"
+    ],
+    "supportedInputModalities": [
+      "text"
+    ],
+    "supportedOutputModalities": [
+      "text"
+    ]
+  },
+  {
+    "id": "openai.gpt-oss-safeguard-120b",
+    "display_name": "GPT OSS Safeguard 120B",
+    "version": "gpt-oss",
+    "description": "Open-source safety model for content moderation on Bedrock Mantle.",
+    "context_length": 128000,
+    "max_completion_tokens": 16000,
+    "supportedInputModalities": [
+      "text"
+    ],
+    "supportedOutputModalities": [
+      "text"
+    ]
+  },
+  {
+    "id": "openai.gpt-oss-safeguard-20b",
+    "display_name": "GPT OSS Safeguard 20B",
+    "version": "gpt-oss",
+    "description": "Open-source compact safety model for moderation on Bedrock Mantle.",
+    "context_length": 128000,
+    "max_completion_tokens": 16000,
+    "supportedInputModalities": [
+      "text"
+    ],
+    "supportedOutputModalities": [
+      "text"
+    ]
+  }
+]

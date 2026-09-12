@@ -909,14 +909,14 @@ func resolveBedrockMantleConfigForAuth(cfg *internalconfig.Config, auth *Auth) *
 	if cfg == nil || len(cfg.BedrockMantle) == 0 {
 		return nil
 	}
-	if auth != nil && auth.Attributes != nil {
-		if idxStr, ok := auth.Attributes["config_index"]; ok {
-			if idx, err := strconv.Atoi(strings.TrimSpace(idxStr)); err == nil && idx >= 0 && idx < len(cfg.BedrockMantle) {
-				return &cfg.BedrockMantle[idx]
-			}
-		}
+	if auth == nil || auth.AuthSourceKind() != AuthSourceConfig || auth.Attributes == nil {
+		return nil
 	}
-	return &cfg.BedrockMantle[0]
+	idx, err := strconv.Atoi(strings.TrimSpace(auth.Attributes[AttributeConfigIndex]))
+	if err != nil || idx < 0 || idx >= len(cfg.BedrockMantle) {
+		return nil
+	}
+	return &cfg.BedrockMantle[idx]
 }
 
 func resolveUpstreamModelForBedrockMantle(cfg *internalconfig.Config, auth *Auth, requestedModel string) string {

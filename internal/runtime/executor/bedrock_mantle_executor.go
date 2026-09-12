@@ -11,11 +11,9 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
-	"sync"
 	"time"
 
-	"github.com/aws/aws-sdk-go-v2/aws"
-	awsconfig "github.com/aws/aws-sdk-go-v2/config"
+	"github.com/router-for-me/CLIProxyAPI/v7/internal/auth/bedrockmantle"
 	"github.com/router-for-me/CLIProxyAPI/v7/internal/config"
 	"github.com/router-for-me/CLIProxyAPI/v7/internal/runtime/executor/helps"
 	"github.com/router-for-me/CLIProxyAPI/v7/internal/thinking"
@@ -30,9 +28,8 @@ import (
 // BedrockMantleExecutor implements execution against AWS Bedrock Mantle
 // OpenAI-compatible endpoints signed with AWS SigV4.
 type BedrockMantleExecutor struct {
-	cfg           *config.Config
-	credMu        sync.RWMutex
-	credProviders map[string]aws.CredentialsProvider
+	cfg       *config.Config
+	credCache *bedrockmantle.ProviderCache
 }
 
 var mantleTransport = &http.Transport{
@@ -60,8 +57,8 @@ func (e *BedrockMantleExecutor) getHTTPClient(ctx context.Context, auth *cliprox
 // NewBedrockMantleExecutor creates an executor for Bedrock Mantle.
 func NewBedrockMantleExecutor(cfg *config.Config) *BedrockMantleExecutor {
 	return &BedrockMantleExecutor{
-		cfg:           cfg,
-		credProviders: make(map[string]aws.CredentialsProvider),
+		cfg:       cfg,
+		credCache: bedrockmantle.NewProviderCache(nil),
 	}
 }
 
@@ -93,62 +90,69 @@ func isBedrockMantleResponsesTerminalEvent(eventName string) bool {
 	}
 }
 
-func (e *BedrockMantleExecutor) resolveCredentials(ctx context.Context, auth *cliproxyauth.Auth) (util.AwsCredentials, error) {
-	var profile, ak, sk, st string
-	if auth != nil && auth.Attributes != nil {
-		profile = strings.TrimSpace(auth.Attributes["profile"])
-		ak = strings.TrimSpace(auth.Attributes["access_key_id"])
-		sk = strings.TrimSpace(auth.Attributes["secret_access_key"])
-		st = strings.TrimSpace(auth.Attributes["session_token"])
+// storageForAuth builds the credential storage for an auth from its metadata
+// (auth-dir files) or attributes (config-synthesized entries).
+func (e *BedrockMantleExecutor) storageForAuth(auth *cliproxyauth.Auth) *bedrockmantle.Storage {
+	if auth == nil {
+		return nil
 	}
-	if profile == "" && ak == "" && e.cfg != nil && len(e.cfg.BedrockMantle) > 0 {
-		profile = strings.TrimSpace(e.cfg.BedrockMantle[0].Profile)
-		ak = strings.TrimSpace(e.cfg.BedrockMantle[0].AccessKeyID)
-		sk = strings.TrimSpace(e.cfg.BedrockMantle[0].SecretAccessKey)
-		st = strings.TrimSpace(e.cfg.BedrockMantle[0].SessionToken)
+	if s := bedrockmantle.FromMetadata(auth.Metadata); s != nil && bedrockmantle.DetectMode(s) != "" {
+		return s
 	}
+	if auth.Attributes != nil {
+		s := &bedrockmantle.Storage{
+			Profile:         strings.TrimSpace(auth.Attributes["profile"]),
+			AWSDir:          strings.TrimSpace(auth.Attributes["aws_dir"]),
+			AccessKeyID:     strings.TrimSpace(auth.Attributes["access_key_id"]),
+			SecretAccessKey: strings.TrimSpace(auth.Attributes["secret_access_key"]),
+			SessionToken:    strings.TrimSpace(auth.Attributes["session_token"]),
+			RoleARN:         strings.TrimSpace(auth.Attributes["role_arn"]),
+			DefaultRegion:   strings.TrimSpace(auth.Attributes["default_region"]),
+		}
+		if cfgEntry := e.resolveMantleConfig(auth); cfgEntry != nil {
+			s.ModelRegions = cfgEntry.ModelRegions
+			if s.DefaultRegion == "" {
+				s.DefaultRegion = cfgEntry.DefaultRegion
+			}
+		}
+		if mode := bedrockmantle.DetectMode(s); mode != "" {
+			s.AuthMode = mode
+			return s
+		}
+	}
+	return nil
+}
 
-	if ak != "" && sk != "" {
+func (e *BedrockMantleExecutor) credentialCacheKey(auth *cliproxyauth.Auth, s *bedrockmantle.Storage) string {
+	if auth != nil && strings.TrimSpace(auth.ID) != "" {
+		if s != nil && s.AuthMode == bedrockmantle.ModeSSO {
+			// Token rotation must rebuild the SSO provider.
+			return auth.ID + "|" + s.LastRefresh
+		}
+		return auth.ID
+	}
+	if s != nil {
+		return s.AuthMode + "|" + s.Profile + "|" + s.AccessKeyID + "|" + s.AccountID + "|" + s.RoleName
+	}
+	return "__default__"
+}
+
+func (e *BedrockMantleExecutor) resolveCredentials(ctx context.Context, auth *cliproxyauth.Auth) (util.AwsCredentials, error) {
+	s := e.storageForAuth(auth)
+	if s == nil {
+		return util.AwsCredentials{}, fmt.Errorf("bedrock mantle: credential has no usable auth mode")
+	}
+	if s.AuthMode == bedrockmantle.ModeStatic && strings.TrimSpace(s.RoleARN) == "" {
 		return util.AwsCredentials{
-			AccessKeyID:     ak,
-			SecretAccessKey: sk,
-			SessionToken:    st,
+			AccessKeyID:     s.AccessKeyID,
+			SecretAccessKey: s.SecretAccessKey,
+			SessionToken:    s.SessionToken,
 		}, nil
 	}
-
-	cacheKey := profile
-	if cacheKey == "" {
-		cacheKey = "__default__"
-	}
-
-	e.credMu.RLock()
-	provider := e.credProviders[cacheKey]
-	e.credMu.RUnlock()
-
-	if provider == nil {
-		e.credMu.Lock()
-		provider = e.credProviders[cacheKey]
-		if provider == nil {
-			var opts []func(*awsconfig.LoadOptions) error
-			if profile != "" {
-				opts = append(opts, awsconfig.WithSharedConfigProfile(profile))
-			}
-			awsCfg, err := awsconfig.LoadDefaultConfig(ctx, opts...)
-			if err != nil {
-				e.credMu.Unlock()
-				return util.AwsCredentials{}, fmt.Errorf("bedrock mantle aws config load failed: %w", err)
-			}
-			provider = awsCfg.Credentials
-			if e.credProviders == nil {
-				e.credProviders = make(map[string]aws.CredentialsProvider)
-			}
-			e.credProviders[cacheKey] = provider
-		}
-		e.credMu.Unlock()
-	}
-
-	creds, err := provider.Retrieve(ctx)
+	key := e.credentialCacheKey(auth, s)
+	creds, err := e.credCache.Retrieve(ctx, key, s)
 	if err != nil {
+		e.credCache.Invalidate(key)
 		return util.AwsCredentials{}, fmt.Errorf("bedrock mantle credentials retrieve failed: %w", err)
 	}
 	return util.AwsCredentials{
@@ -162,22 +166,24 @@ func (e *BedrockMantleExecutor) resolveMantleConfig(auth *cliproxyauth.Auth) *co
 	if e == nil || e.cfg == nil || len(e.cfg.BedrockMantle) == 0 {
 		return nil
 	}
-	if auth != nil && auth.Attributes != nil {
-		if idxStr, ok := auth.Attributes["config_index"]; ok {
-			if idx, err := strconv.Atoi(strings.TrimSpace(idxStr)); err == nil && idx >= 0 && idx < len(e.cfg.BedrockMantle) {
-				return &e.cfg.BedrockMantle[idx]
-			}
-		}
+	if auth == nil || auth.AuthSourceKind() != cliproxyauth.AuthSourceConfig || auth.Attributes == nil {
+		return nil
 	}
-	return &e.cfg.BedrockMantle[0]
+	idx, err := strconv.Atoi(strings.TrimSpace(auth.Attributes[cliproxyauth.AttributeConfigIndex]))
+	if err != nil || idx < 0 || idx >= len(e.cfg.BedrockMantle) {
+		return nil
+	}
+	return &e.cfg.BedrockMantle[idx]
 }
 
 func (e *BedrockMantleExecutor) resolveRegion(auth *cliproxyauth.Auth, modelName string) string {
-	mantleConfig := e.resolveMantleConfig(auth)
-	if mantleConfig != nil {
+	if s := e.storageForAuth(auth); s != nil {
+		return s.ResolveRegion(modelName)
+	}
+	if mantleConfig := e.resolveMantleConfig(auth); mantleConfig != nil {
 		return mantleConfig.ResolveRegion(modelName)
 	}
-	return "us-east-1"
+	return bedrockmantle.DefaultBedrockRegion
 }
 
 func (e *BedrockMantleExecutor) sanitizeMantlePayload(payload []byte, modelName string) []byte {
@@ -591,6 +597,33 @@ func (e *BedrockMantleExecutor) CountTokens(ctx context.Context, auth *cliproxya
 	return cliproxyexecutor.Response{Payload: translatedUsage}, nil
 }
 
+// Refresh rotates the IAM Identity Center access token for SSO credentials.
+// Static and profile credentials have nothing to refresh.
 func (e *BedrockMantleExecutor) Refresh(ctx context.Context, auth *cliproxyauth.Auth) (*cliproxyauth.Auth, error) {
+	if auth == nil {
+		return nil, fmt.Errorf("bedrock mantle executor: auth is nil")
+	}
+	s := bedrockmantle.FromMetadata(auth.Metadata)
+	if s == nil || s.AuthMode != bedrockmantle.ModeSSO {
+		return auth, nil
+	}
+	sess := s.SSOSession()
+	if strings.TrimSpace(sess.Token.RefreshToken) == "" {
+		return nil, statusErr{code: http.StatusUnauthorized, msg: "bedrock mantle sso: refresh token missing; re-login required"}
+	}
+	client := bedrockmantle.NewClient(s.SSORegion, nil)
+	tok, err := client.RefreshToken(ctx, sess)
+	if err != nil {
+		return nil, statusErr{code: http.StatusUnauthorized, msg: err.Error()}
+	}
+	s.ApplyToken(tok)
+	if auth.Metadata == nil {
+		auth.Metadata = make(map[string]any)
+	}
+	auth.Metadata[bedrockmantle.KeyAccessToken] = s.AccessToken
+	auth.Metadata[bedrockmantle.KeyRefreshToken] = s.RefreshToken
+	auth.Metadata[bedrockmantle.KeyExpired] = s.Expired
+	auth.Metadata[bedrockmantle.KeyLastRefresh] = s.LastRefresh
+	e.credCache.Invalidate(e.credentialCacheKey(auth, s))
 	return auth, nil
 }

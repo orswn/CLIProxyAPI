@@ -752,6 +752,7 @@ func (h *Handler) CancelAuthSession(c *gin.Context) {
 		return
 	}
 	cancelled := CancelOAuthSession(state)
+	mantleSessions.del(state)
 	c.JSON(http.StatusOK, gin.H{"status": "ok", "cancelled": cancelled})
 }
 

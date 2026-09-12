@@ -157,6 +157,8 @@ func (s *Service) registerModelsForAuthWithCache(ctx context.Context, a *coreaut
 	case "bedrock-mantle":
 		if entry := s.resolveConfigBedrockMantleKey(a); entry != nil {
 			models = buildBedrockMantleConfigModels(entry)
+		} else {
+			models = registry.GetBedrockMantleModels()
 		}
 	default:
 		// Handle OpenAI-compatibility providers by name using config
@@ -490,13 +492,7 @@ func (s *Service) resolveConfigBedrockMantleKey(auth *coreauth.Auth) *config.Bed
 	if auth == nil || s.cfg == nil {
 		return nil
 	}
-	if entry := configEntryForAuthIndex(auth, s.cfg.BedrockMantle); entry != nil {
-		return entry
-	}
-	if len(s.cfg.BedrockMantle) > 0 {
-		return &s.cfg.BedrockMantle[0]
-	}
-	return nil
+	return configEntryForAuthIndex(auth, s.cfg.BedrockMantle)
 }
 
 func buildBedrockMantleConfigModels(entry *config.BedrockMantleConfig) []*ModelInfo {

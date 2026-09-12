@@ -63,6 +63,7 @@ func TestBedrockMantleRegionResolution(t *testing.T) {
 	auth := &cliproxyauth.Auth{
 		Attributes: map[string]string{
 			"config_index": "0",
+			"source":       "config:bedrock-mantle[test]",
 		},
 	}
 
@@ -136,6 +137,7 @@ func TestBedrockMantleExecutionSigV4(t *testing.T) {
 			"access_key_id":     "AKIA-EXAMPLE",
 			"secret_access_key": "SECRET-EXAMPLE",
 			"config_index":      "0",
+			"source":            "config:bedrock-mantle[test]",
 		},
 	}
 
@@ -478,5 +480,64 @@ func TestBedrockMantleCountTokens(t *testing.T) {
 	}
 	if len(resp.Payload) == 0 {
 		t.Fatal("expected non-empty payload from CountTokens")
+	}
+}
+
+func TestBedrockMantleAuthFileStaticCredentialsAndRegions(t *testing.T) {
+	exec := NewBedrockMantleExecutor(&config.Config{})
+	auth := &cliproxyauth.Auth{
+		ID:       "bedrock-mantle-personal.json",
+		Provider: "bedrock-mantle",
+		Attributes: map[string]string{
+			"path": "/tmp/auth/bedrock-mantle-personal.json",
+		},
+		Metadata: map[string]any{
+			"type":              "bedrock-mantle",
+			"auth_mode":         "static",
+			"access_key_id":     "AKIA-FILE",
+			"secret_access_key": "SECRET-FILE",
+			"default_region":    "eu-west-1",
+			"model_regions":     map[string]any{"openai.gpt-6-astra": "us-west-2"},
+		},
+	}
+	creds, err := exec.resolveCredentials(context.Background(), auth)
+	if err != nil {
+		t.Fatalf("resolveCredentials: %v", err)
+	}
+	if creds.AccessKeyID != "AKIA-FILE" || creds.SecretAccessKey != "SECRET-FILE" {
+		t.Fatalf("unexpected creds %+v", creds)
+	}
+	if got := exec.resolveRegion(auth, "openai.gpt-6-astra"); got != "us-west-2" {
+		t.Fatalf("model region = %s", got)
+	}
+	if got := exec.resolveRegion(auth, "other"); got != "eu-west-1" {
+		t.Fatalf("default region = %s", got)
+	}
+}
+
+func TestBedrockMantleNoFallbackToFirstConfigEntry(t *testing.T) {
+	cfg := &config.Config{SDKConfig: config.SDKConfig{BedrockMantle: []config.BedrockMantleConfig{{
+		AccessKeyID: "AKIA-CFG", SecretAccessKey: "SECRET-CFG", DefaultRegion: "us-west-2",
+	}}}}
+	exec := NewBedrockMantleExecutor(cfg)
+	auth := &cliproxyauth.Auth{ID: "x.json", Attributes: map[string]string{"path": "/tmp/x.json"}, Metadata: map[string]any{"type": "bedrock-mantle"}}
+	if _, err := exec.resolveCredentials(context.Background(), auth); err == nil {
+		t.Fatalf("expected error for auth without credentials")
+	}
+	if got := exec.resolveRegion(auth, "m"); got != "us-east-1" {
+		t.Fatalf("region should not leak from config: %s", got)
+	}
+}
+
+func TestBedrockMantleRefreshSkipsNonSSO(t *testing.T) {
+	exec := NewBedrockMantleExecutor(&config.Config{})
+	auth := &cliproxyauth.Auth{Metadata: map[string]any{"type": "bedrock-mantle", "access_key_id": "a", "secret_access_key": "b"}}
+	out, err := exec.Refresh(context.Background(), auth)
+	if err != nil || out != auth {
+		t.Fatalf("refresh should be a no-op: %v", err)
+	}
+	ssoAuth := &cliproxyauth.Auth{Metadata: map[string]any{"type": "bedrock-mantle", "auth_mode": "sso", "start_url": "https://x", "access_token": "tok"}}
+	if _, err := exec.Refresh(context.Background(), ssoAuth); err == nil {
+		t.Fatalf("expected error when refresh token missing")
 	}
 }
