@@ -685,6 +685,10 @@ nonstream-keepalive-interval: 0
 #     disabled: false # optional: set to true to disable this provider without removing it
 #     prefix: "test" # optional: require calls like "test/kimi-k2" to target this provider's credentials
 #     base-url: "https://openrouter.ai/api/v1" # The base URL of the provider.
+#     upstream-api: "chat-completions" # optional: provider API used for chat traffic
+#                                      # "chat-completions" (default) posts to {base-url}/chat/completions
+#                                      # "responses" posts to {base-url}/responses for providers with a native Responses API
+#                                      # Requests fall back to chat-completions when no translator links the client schema to the Responses schema
 #     support-prompt-cache-key: false # optional: derive prompt_cache_key for requests from all input protocols
 #     disable-cooling: false # optional provider override: true disables cooling, false enables it; omit to inherit global
 #     request-retry: 3 # optional per-provider override; 0 disables additional rounds; omit or set < 0 to inherit global
@@ -717,6 +721,7 @@ nonstream-keepalive-interval: 0
 #         input-modalities: [text, image] # optional: declare /v1/chat/completions and /v1/responses multimodal input for Codex clients. Use [text] for upstreams that reject multimodal tool result content.
 #         output-modalities: [text]       # optional: declare output modalities when known
 #         is-compat: false                # optional: preserve Claude thinking blocks for compatible upstreams
+#         upstream-api: "responses"       # optional: per-model override of the provider upstream-api
 #         thinking:                      # optional: omit to default to levels ["low","medium","high"]
 #           levels: ["low", "medium", "high"]
 #         pricing:                       # optional: cost per 1M tokens reported in model listings

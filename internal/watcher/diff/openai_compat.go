@@ -83,6 +83,9 @@ func describeOpenAICompatibilityUpdate(oldEntry, newEntry config.OpenAICompatibi
 	if oldEntry.SupportPromptCacheKey != newEntry.SupportPromptCacheKey {
 		details = append(details, fmt.Sprintf("support-prompt-cache-key %t -> %t", oldEntry.SupportPromptCacheKey, newEntry.SupportPromptCacheKey))
 	}
+	if oldAPI, newAPI := oldEntry.UpstreamAPIForModel(), newEntry.UpstreamAPIForModel(); oldAPI != newAPI {
+		details = append(details, fmt.Sprintf("upstream-api %s -> %s", oldAPI, newAPI))
+	}
 	if !optionalBoolEqual(oldEntry.DisableCooling, newEntry.DisableCooling) {
 		details = append(details, fmt.Sprintf("disable-cooling %s -> %s", formatOptionalBool(oldEntry.DisableCooling), formatOptionalBool(newEntry.DisableCooling)))
 	}

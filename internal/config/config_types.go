@@ -718,6 +718,11 @@ type OpenAICompatibility struct {
 	// Headers optionally adds extra HTTP headers for requests sent to this provider.
 	Headers map[string]string `yaml:"headers,omitempty" json:"headers,omitempty"`
 
+	// UpstreamAPI selects the provider API used for chat traffic.
+	// "chat-completions" (default) posts to {base-url}/chat/completions.
+	// "responses" posts to {base-url}/responses instead.
+	UpstreamAPI string `yaml:"upstream-api,omitempty" json:"upstream-api,omitempty"`
+
 	// SupportPromptCacheKey enables derived prompt_cache_key injection for supported requests.
 	SupportPromptCacheKey bool `yaml:"support-prompt-cache-key,omitempty" json:"support-prompt-cache-key,omitempty"`
 
@@ -777,6 +782,10 @@ type OpenAICompatibilityModel struct {
 	// IsCompat preserves Claude thinking blocks for compatible upstreams.
 	// Default false keeps the normal signature validation behavior.
 	IsCompat bool `yaml:"is-compat,omitempty" json:"is-compat,omitempty"`
+
+	// UpstreamAPI overrides the provider upstream API for this model.
+	// Recognized values are "chat-completions" and "responses".
+	UpstreamAPI string `yaml:"upstream-api,omitempty" json:"upstream-api,omitempty"`
 
 	// Thinking configures the thinking/reasoning capability for this model.
 	// If nil, the model defaults to level-based reasoning with levels ["low", "medium", "high"].
