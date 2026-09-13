@@ -289,3 +289,34 @@ func TestOpenAICompatExecutorResponsesUpstreamTranslatesClaudeClient(t *testing.
 		t.Fatalf("client payload was not translated back to Claude: %s", string(resp.Payload))
 	}
 }
+
+func TestOpenAICompatExecutorResponsesUpstreamDedupesInputItemIDs(t *testing.T) {
+	var gotBody []byte
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		gotBody, _ = io.ReadAll(r.Body)
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"id":"resp_1","object":"response","status":"completed","output":[],"usage":{"input_tokens":1,"output_tokens":1,"total_tokens":2}}`))
+	}))
+	defer server.Close()
+
+	executor := newUpstreamAPITestExecutor("responses", []config.OpenAICompatibilityModel{{Name: "kimi-k3", Alias: "kimi-k3"}})
+	if _, err := executor.Execute(context.Background(), newUpstreamAPITestAuth(server.URL), cliproxyexecutor.Request{
+		Model: "kimi-k3",
+		Payload: []byte(`{"model":"kimi-k3","input":[` +
+			`{"type":"message","id":"msg_5","role":"assistant","content":[{"type":"output_text","text":"first"}]},` +
+			`{"type":"message","id":"msg_5","role":"assistant","content":[{"type":"output_text","text":"second"}]},` +
+			`{"type":"message","role":"user","content":[{"type":"input_text","text":"continue"}]}]}`),
+	}, cliproxyexecutor.Options{SourceFormat: sdktranslator.FormatOpenAIResponse}); err != nil {
+		t.Fatalf("Execute error: %v", err)
+	}
+	items := gjson.GetBytes(gotBody, "input").Array()
+	if len(items) != 3 {
+		t.Fatalf("items = %d, want 3: %s", len(items), gotBody)
+	}
+	if items[0].Get("id").String() != "msg_5" {
+		t.Errorf("first item lost its id: %s", items[0].Raw)
+	}
+	if items[1].Get("id").Exists() {
+		t.Errorf("duplicate id reached the upstream: %s", items[1].Raw)
+	}
+}

@@ -12,6 +12,25 @@ import (
 	"github.com/tidwall/sjson"
 )
 
+// prepareOpenAIResponsesInput applies the input hygiene that every Responses
+// upstream needs. It drops reasoning payloads the target family cannot read and
+// removes repeated item IDs, both of which appear when a session moves from one
+// provider to another and the client replays its stored history.
+func prepareOpenAIResponsesInput(ctx context.Context, provider string, body []byte) []byte {
+	body = sanitizeOpenAIResponsesReasoningEncryptedContent(ctx, provider, body)
+	return dedupeOpenAIResponsesInputItemIDs(ctx, provider, body)
+}
+
+// dedupeOpenAIResponsesInputItemIDs removes repeated input item IDs, which a
+// Responses upstream rejects with "Duplicate item found with id ...".
+func dedupeOpenAIResponsesInputItemIDs(ctx context.Context, provider string, body []byte) []byte {
+	deduped, duplicates := helps.DedupeResponsesInputItemIDs(body)
+	if duplicates > 0 {
+		helps.LogWithRequestID(ctx).Debugf("%s: dropped %d duplicate input item id(s)", provider, duplicates)
+	}
+	return deduped
+}
+
 func sanitizeOpenAIResponsesReasoningEncryptedContent(ctx context.Context, provider string, body []byte) []byte {
 	inputResult := util.GetGJSONBytesNoCopy(body, "input")
 	if !inputResult.Exists() || !inputResult.IsArray() {

@@ -145,6 +145,7 @@ func (e *OpenAICompatExecutor) Execute(ctx context.Context, auth *cliproxyauth.A
 		if updated, errDelete := sjson.DeleteBytes(translated, "stream"); errDelete == nil {
 			translated = updated
 		}
+		translated = prepareOpenAIResponsesInput(ctx, "openai compat executor", translated)
 	}
 	if opts.Alt == "responses/compact" {
 		if updated, errDelete := sjson.DeleteBytes(translated, "stream"); errDelete == nil {
@@ -372,6 +373,7 @@ func (e *OpenAICompatExecutor) ExecuteStream(ctx context.Context, auth *cliproxy
 		// Responses streams always report usage in the terminal event and reject
 		// the Chat Completions stream_options field.
 		translated = helps.SetBoolIfDifferent(translated, "stream", true)
+		translated = prepareOpenAIResponsesInput(ctx, "openai compat executor", translated)
 	} else {
 		// Request usage data in the final streaming chunk so that token statistics
 		// are captured even when the upstream is an OpenAI-compatible provider.

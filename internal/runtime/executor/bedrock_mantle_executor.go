@@ -186,6 +186,21 @@ func (e *BedrockMantleExecutor) resolveRegion(auth *cliproxyauth.Auth, modelName
 	return bedrockmantle.DefaultBedrockRegion
 }
 
+// prepareResponsesPayload applies the shared Responses input hygiene and drops
+// conversation state Mantle cannot resolve. Bedrock does not persist responses,
+// so a previous_response_id carried over from another provider only produces an
+// upstream error.
+func (e *BedrockMantleExecutor) prepareResponsesPayload(ctx context.Context, payload []byte, to sdktranslator.Format) []byte {
+	if to != sdktranslator.FormatOpenAIResponse {
+		return payload
+	}
+	payload = prepareOpenAIResponsesInput(ctx, "bedrock mantle", payload)
+	if updated, errDelete := sjson.DeleteBytes(payload, "previous_response_id"); errDelete == nil {
+		payload = updated
+	}
+	return payload
+}
+
 func (e *BedrockMantleExecutor) sanitizeMantlePayload(payload []byte, modelName string) []byte {
 	m := strings.ToLower(modelName)
 	if strings.Contains(m, "gpt-6") || strings.Contains(m, "gpt-5.6") || strings.Contains(m, "astra") {
@@ -254,6 +269,7 @@ func (e *BedrockMantleExecutor) Execute(ctx context.Context, auth *cliproxyauth.
 	requestPath := helps.PayloadRequestPath(opts)
 	translated = helps.ApplyPayloadConfigWithRequest(e.cfg, baseModel, to.String(), from.String(), "", translated, originalTranslated, requestedModel, requestPath, opts.Headers)
 	translated = e.sanitizeMantlePayload(translated, baseModel)
+	translated = e.prepareResponsesPayload(ctx, translated, to)
 	reporter.SetTranslatedReasoningEffort(translated, to.String())
 
 	httpReq, err := http.NewRequestWithContext(ctx, http.MethodPost, endpointURL, bytes.NewReader(translated))
@@ -366,6 +382,7 @@ func (e *BedrockMantleExecutor) ExecuteStream(ctx context.Context, auth *cliprox
 	requestPath := helps.PayloadRequestPath(opts)
 	translated = helps.ApplyPayloadConfigWithRequest(e.cfg, baseModel, to.String(), from.String(), "", translated, originalTranslated, requestedModel, requestPath, opts.Headers)
 	translated = e.sanitizeMantlePayload(translated, baseModel)
+	translated = e.prepareResponsesPayload(ctx, translated, to)
 
 	if to == sdktranslator.FormatOpenAI {
 		translated = helps.SetBoolIfDifferent(translated, "stream_options.include_usage", true)
