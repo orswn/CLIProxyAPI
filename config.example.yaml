@@ -368,6 +368,16 @@ nonstream-keepalive-interval: 0
 #         is-compat: false             # optional: preserve thinking blocks with empty signatures for compatible upstreams
 #         thinking:                    # optional: exact thinking capability for this configured model
 #           levels: ["high", "medium", "low", "none", "auto"]
+#         pricing:               # optional: cost per 1M tokens reported in model listings
+#           input: 3
+#           output: 15
+#           cached: 0.3          # optional: cached prompt tokens
+#           cache-creation: 3.75 # optional: cache write tokens
+#           reasoning: 15        # optional: reasoning tokens
+#           long-context:        # optional: rates used above the prompt-token threshold
+#             threshold: 200000  # prompt tokens required to switch to these rates
+#             input: 6
+#             output: 22.5
 #     excluded-models:
 #       - "gemini-2.5-pro"     # exclude specific models from this provider (exact match)
 #       - "gemini-2.5-*"       # wildcard matching prefix (e.g. gemini-2.5-flash, gemini-2.5-pro)
@@ -404,6 +414,16 @@ nonstream-keepalive-interval: 0
 #         is-compat: false             # optional: preserve thinking blocks with empty signatures for compatible upstreams
 #         thinking:                    # optional: exact thinking capability for this configured model
 #           levels: ["high", "medium", "low", "none", "auto"]
+#         pricing:               # optional: cost per 1M tokens reported in model listings
+#           input: 3
+#           output: 15
+#           cached: 0.3          # optional: cached prompt tokens
+#           cache-creation: 3.75 # optional: cache write tokens
+#           reasoning: 15        # optional: reasoning tokens
+#           long-context:        # optional: rates used above the prompt-token threshold
+#             threshold: 200000  # prompt tokens required to switch to these rates
+#             input: 6
+#             output: 22.5
 #     excluded-models:
 #       - "gemini-2.5-pro"
 
@@ -442,6 +462,16 @@ nonstream-keepalive-interval: 0
 #         is-compat: false
 #         thinking:              # optional: exact thinking capability for this configured model
 #           levels: ["xhigh", "high", "medium", "low"]
+#         pricing:               # optional: cost per 1M tokens reported in model listings
+#           input: 3
+#           output: 15
+#           cached: 0.3          # optional: cached prompt tokens
+#           cache-creation: 3.75 # optional: cache write tokens
+#           reasoning: 15        # optional: reasoning tokens
+#           long-context:        # optional: rates used above the prompt-token threshold
+#             threshold: 200000  # prompt tokens required to switch to these rates
+#             input: 6
+#             output: 22.5
 #     excluded-models:
 #       - "gpt-5.1"         # exclude specific models (exact match)
 #       - "gpt-5-*"         # wildcard matching prefix (e.g. gpt-5-medium, gpt-5-codex)
@@ -479,6 +509,16 @@ nonstream-keepalive-interval: 0
 #         is-compat: false        # optional: preserve thinking blocks with empty signatures for compatible upstreams
 #         thinking:               # optional: exact thinking capability for this configured model
 #           levels: ["xhigh", "high", "medium", "low"]
+#         pricing:               # optional: cost per 1M tokens reported in model listings
+#           input: 3
+#           output: 15
+#           cached: 0.3          # optional: cached prompt tokens
+#           cache-creation: 3.75 # optional: cache write tokens
+#           reasoning: 15        # optional: reasoning tokens
+#           long-context:        # optional: rates used above the prompt-token threshold
+#             threshold: 200000  # prompt tokens required to switch to these rates
+#             input: 6
+#             output: 22.5
 #     excluded-models:
 #       - "grok-4.1"             # exclude specific models (exact match)
 #       - "grok-3-*"             # wildcard matching prefix
@@ -513,6 +553,16 @@ nonstream-keepalive-interval: 0
 #         is-compat: false                    # optional: preserve thinking blocks with empty signatures for compatible upstreams
 #         thinking:                           # optional: exact thinking capability for this configured model
 #           levels: ["max", "xhigh", "high", "medium", "low", "minimal", "none", "auto"]
+#         pricing:               # optional: cost per 1M tokens reported in model listings
+#           input: 3
+#           output: 15
+#           cached: 0.3          # optional: cached prompt tokens
+#           cache-creation: 3.75 # optional: cache write tokens
+#           reasoning: 15        # optional: reasoning tokens
+#           long-context:        # optional: rates used above the prompt-token threshold
+#             threshold: 200000  # prompt tokens required to switch to these rates
+#             input: 6
+#             output: 22.5
 #     excluded-models:
 #       - "claude-opus-4-5-20251101" # exclude specific models (exact match)
 #       - "claude-3-*"               # wildcard matching prefix (e.g. claude-3-7-sonnet-20250219)
@@ -669,6 +719,19 @@ nonstream-keepalive-interval: 0
 #         is-compat: false                # optional: preserve Claude thinking blocks for compatible upstreams
 #         thinking:                      # optional: omit to default to levels ["low","medium","high"]
 #           levels: ["low", "medium", "high"]
+#         pricing:                       # optional: cost per 1M tokens reported in model listings
+#           input: 0.55                  # prompt tokens
+#           output: 2.19                 # completion tokens
+#           cached: 0.055                # optional: cached prompt tokens
+#           cache-creation: 0.6875       # optional: cache write tokens
+#           reasoning: 2.19              # optional: reasoning tokens
+#           long-context:                # optional: rates used above the prompt-token threshold
+#             threshold: 128000          # prompt tokens required to switch to these rates
+#             input: 1.1
+#             output: 4.38
+#             cached: 0.11
+#             cache-creation: 1.375
+#             reasoning: 4.38
 #       # You may repeat the same alias to build an internal model pool.
 #       # The client still sees only one alias in the model list.
 #       # Requests to that alias will round-robin across the upstream names below,
@@ -702,6 +765,16 @@ nonstream-keepalive-interval: 0
 #         display-name: "Vertex Flash"            # optional catalog display name
 #         thinking:                                # optional: exact thinking capability for this configured model
 #           levels: ["high", "medium", "low", "none", "auto"]
+#         pricing:               # optional: cost per 1M tokens reported in model listings
+#           input: 3
+#           output: 15
+#           cached: 0.3          # optional: cached prompt tokens
+#           cache-creation: 3.75 # optional: cache write tokens
+#           reasoning: 15        # optional: reasoning tokens
+#           long-context:        # optional: rates used above the prompt-token threshold
+#             threshold: 200000  # prompt tokens required to switch to these rates
+#             input: 6
+#             output: 22.5
 #       - name: "gemini-2.5-pro"
 #         alias: "vertex-pro"
 #     excluded-models:                            # optional: models to exclude from listing
@@ -901,6 +974,13 @@ nonstream-keepalive-interval: 0
 #     models:
 #       - name: "openai.gpt-6-astra"
 #         alias: "gpt-6-astra"
+#         pricing:            # optional: overrides the built-in rates for this model
+#           input: 1.25
+#           output: 10
+#           long-context:
+#             threshold: 272000
+#             input: 2.5
+#             output: 15
 #       - name: "claude-fable-5.1"
 #       - name: "gemini-3.8-flash"
 #   # Or using explicit IAM credentials:

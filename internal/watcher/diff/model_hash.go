@@ -63,6 +63,11 @@ func thinkingHashSuffix(support *registry.ThinkingSupport) string {
 	return "|thinking=" + string(data)
 }
 
+func pricingHashSuffix(pricing *registry.ModelPricing) string {
+	data, _ := json.Marshal(registry.NormalizeModelPricing(pricing))
+	return "|pricing=" + string(data)
+}
+
 func normalizeModelPairs(collect func(out func(key string))) []string {
 	seen := make(map[string]struct{})
 	keys := make([]string, 0)

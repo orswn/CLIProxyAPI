@@ -77,6 +77,9 @@ type VertexCompatModel struct {
 
 	// Thinking configures the thinking/reasoning capability for this model.
 	Thinking *registry.ThinkingSupport `yaml:"thinking,omitempty" json:"thinking,omitempty"`
+
+	// Pricing overrides the token pricing advertised for this model, per million tokens.
+	Pricing *registry.ModelPricing `yaml:"pricing,omitempty" json:"pricing,omitempty"`
 }
 
 func (m VertexCompatModel) GetName() string        { return m.Name }
@@ -85,6 +88,10 @@ func (m VertexCompatModel) GetDisplayName() string { return m.DisplayName }
 func (m VertexCompatModel) GetForceMapping() bool  { return m.ForceMapping }
 func (m VertexCompatModel) GetThinking() *registry.ThinkingSupport {
 	return m.Thinking
+}
+
+func (m VertexCompatModel) GetPricing() *registry.ModelPricing {
+	return m.Pricing
 }
 
 // SanitizeVertexCompatKeys deduplicates and normalizes Vertex-compatible API key credentials.

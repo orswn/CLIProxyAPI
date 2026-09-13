@@ -742,6 +742,10 @@ type modelCompatEntry interface {
 	GetIsCompat() bool
 }
 
+type modelPricingEntry interface {
+	GetPricing() *registry.ModelPricing
+}
+
 func buildConfiguredModelInfo(model modelEntry, ownedBy, modelType string, created int64, fallbackDisplayName string, userDefined bool) *ModelInfo {
 	name := strings.TrimSpace(model.GetName())
 	alias := strings.TrimSpace(model.GetAlias())
@@ -780,6 +784,9 @@ func buildConfiguredModelInfo(model modelEntry, ownedBy, modelType string, creat
 	}
 	if compatModel, okCompat := any(model).(modelCompatEntry); okCompat {
 		info.IsCompat = compatModel.GetIsCompat()
+	}
+	if pricingModel, okPricing := any(model).(modelPricingEntry); okPricing {
+		info.Pricing = registry.NormalizeModelPricing(pricingModel.GetPricing())
 	}
 	return info
 }

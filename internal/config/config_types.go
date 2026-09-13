@@ -470,6 +470,9 @@ type ClaudeModel struct {
 
 	// Thinking configures the thinking/reasoning capability for this model.
 	Thinking *registry.ThinkingSupport `yaml:"thinking,omitempty" json:"thinking,omitempty"`
+
+	// Pricing overrides the token pricing advertised for this model, per million tokens.
+	Pricing *registry.ModelPricing `yaml:"pricing,omitempty" json:"pricing,omitempty"`
 }
 
 func (m ClaudeModel) GetName() string { return m.Name }
@@ -482,6 +485,8 @@ func (m ClaudeModel) GetForceMapping() bool    { return m.ForceMapping }
 func (m ClaudeModel) GetIsCompat() bool        { return m.IsCompat }
 
 func (m ClaudeModel) GetThinking() *registry.ThinkingSupport { return m.Thinking }
+
+func (m ClaudeModel) GetPricing() *registry.ModelPricing { return m.Pricing }
 
 // CodexKey represents the configuration for a Codex API key,
 // including the API key itself and an optional base URL for the API endpoint.
@@ -568,6 +573,9 @@ type CodexModel struct {
 
 	// Thinking configures the thinking/reasoning capability for this model.
 	Thinking *registry.ThinkingSupport `yaml:"thinking,omitempty" json:"thinking,omitempty"`
+
+	// Pricing overrides the token pricing advertised for this model, per million tokens.
+	Pricing *registry.ModelPricing `yaml:"pricing,omitempty" json:"pricing,omitempty"`
 }
 
 func (m CodexModel) GetName() string { return m.Name }
@@ -580,6 +588,8 @@ func (m CodexModel) GetForceMapping() bool    { return m.ForceMapping }
 func (m CodexModel) GetIsCompat() bool        { return m.IsCompat }
 
 func (m CodexModel) GetThinking() *registry.ThinkingSupport { return m.Thinking }
+
+func (m CodexModel) GetPricing() *registry.ModelPricing { return m.Pricing }
 
 // XAIKey uses the Codex API key structure for native xAI execution.
 type XAIKey = CodexKey
@@ -662,6 +672,9 @@ type GeminiModel struct {
 
 	// Thinking configures the thinking/reasoning capability for this model.
 	Thinking *registry.ThinkingSupport `yaml:"thinking,omitempty" json:"thinking,omitempty"`
+
+	// Pricing overrides the token pricing advertised for this model, per million tokens.
+	Pricing *registry.ModelPricing `yaml:"pricing,omitempty" json:"pricing,omitempty"`
 }
 
 func (m GeminiModel) GetName() string { return m.Name }
@@ -674,6 +687,8 @@ func (m GeminiModel) GetForceMapping() bool    { return m.ForceMapping }
 func (m GeminiModel) GetIsCompat() bool        { return m.IsCompat }
 
 func (m GeminiModel) GetThinking() *registry.ThinkingSupport { return m.Thinking }
+
+func (m GeminiModel) GetPricing() *registry.ModelPricing { return m.Pricing }
 
 // OpenAICompatibility represents the configuration for OpenAI API compatibility
 // with external providers, allowing model aliases to be routed through OpenAI API format.
@@ -766,6 +781,9 @@ type OpenAICompatibilityModel struct {
 	// Thinking configures the thinking/reasoning capability for this model.
 	// If nil, the model defaults to level-based reasoning with levels ["low", "medium", "high"].
 	Thinking *registry.ThinkingSupport `yaml:"thinking,omitempty" json:"thinking,omitempty"`
+
+	// Pricing overrides the token pricing advertised for this model, per million tokens.
+	Pricing *registry.ModelPricing `yaml:"pricing,omitempty" json:"pricing,omitempty"`
 }
 
 func (m OpenAICompatibilityModel) GetName() string { return m.Name }
@@ -778,6 +796,8 @@ func (m OpenAICompatibilityModel) GetForceMapping() bool    { return m.ForceMapp
 func (m OpenAICompatibilityModel) GetIsCompat() bool        { return m.IsCompat }
 
 func (m OpenAICompatibilityModel) GetThinking() *registry.ThinkingSupport { return m.Thinking }
+
+func (m OpenAICompatibilityModel) GetPricing() *registry.ModelPricing { return m.Pricing }
 
 // BedrockMantleConfig represents the configuration for AWS Bedrock Mantle.
 type BedrockMantleConfig struct {

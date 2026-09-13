@@ -45,7 +45,7 @@ func SummarizeGeminiModels(models []config.GeminiModel) GeminiModelsSummary {
 			if model.IsCompat {
 				isCompat = "true"
 			}
-			out(strings.ToLower(name) + "|" + strings.ToLower(alias) + "|" + strings.TrimSpace(model.DisplayName) + "|is-compat=" + isCompat + thinkingHashSuffix(model.Thinking))
+			out(strings.ToLower(name) + "|" + strings.ToLower(alias) + "|" + strings.TrimSpace(model.DisplayName) + "|is-compat=" + isCompat + thinkingHashSuffix(model.Thinking) + pricingHashSuffix(model.Pricing))
 		}
 	})
 	return GeminiModelsSummary{
@@ -70,7 +70,7 @@ func SummarizeClaudeModels(models []config.ClaudeModel) ClaudeModelsSummary {
 			if model.IsCompat {
 				isCompat = "true"
 			}
-			out(strings.ToLower(name) + "|" + strings.ToLower(alias) + "|" + strings.TrimSpace(model.DisplayName) + "|is-compat=" + isCompat + thinkingHashSuffix(model.Thinking))
+			out(strings.ToLower(name) + "|" + strings.ToLower(alias) + "|" + strings.TrimSpace(model.DisplayName) + "|is-compat=" + isCompat + thinkingHashSuffix(model.Thinking) + pricingHashSuffix(model.Pricing))
 		}
 	})
 	return ClaudeModelsSummary{
@@ -99,7 +99,7 @@ func SummarizeCodexModels(models []config.CodexModel) CodexModelsSummary {
 			if model.IsCompat {
 				isCompat = "true"
 			}
-			out(strings.ToLower(name) + "|" + strings.ToLower(alias) + "|" + strings.TrimSpace(model.DisplayName) + "|force-mapping=" + forceMapping + "|is-compat=" + isCompat + thinkingHashSuffix(model.Thinking))
+			out(strings.ToLower(name) + "|" + strings.ToLower(alias) + "|" + strings.TrimSpace(model.DisplayName) + "|force-mapping=" + forceMapping + "|is-compat=" + isCompat + thinkingHashSuffix(model.Thinking) + pricingHashSuffix(model.Pricing))
 		}
 	})
 	return CodexModelsSummary{
@@ -123,7 +123,7 @@ func SummarizeVertexModels(models []config.VertexCompatModel) VertexModelsSummar
 		if alias != "" {
 			name = alias
 		}
-		names = append(names, name+"|"+strings.TrimSpace(model.DisplayName)+thinkingHashSuffix(model.Thinking))
+		names = append(names, name+"|"+strings.TrimSpace(model.DisplayName)+thinkingHashSuffix(model.Thinking)+pricingHashSuffix(model.Pricing))
 	}
 	if len(names) == 0 {
 		return VertexModelsSummary{}

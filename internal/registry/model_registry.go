@@ -102,22 +102,22 @@ type ModelConfig struct {
 
 // ModelPricing describes token pricing and context thresholds for a model per million tokens.
 type ModelPricing struct {
-	Input         float64             `json:"input"`
-	Output        float64             `json:"output"`
-	Cached        float64             `json:"cached,omitempty"`
-	CacheCreation float64             `json:"cache_creation,omitempty"`
-	Reasoning     float64             `json:"reasoning,omitempty"`
-	LongContext   *LongContextPricing `json:"long_context,omitempty"`
+	Input         float64             `json:"input" yaml:"input,omitempty"`
+	Output        float64             `json:"output" yaml:"output,omitempty"`
+	Cached        float64             `json:"cached,omitempty" yaml:"cached,omitempty"`
+	CacheCreation float64             `json:"cache_creation,omitempty" yaml:"cache-creation,omitempty"`
+	Reasoning     float64             `json:"reasoning,omitempty" yaml:"reasoning,omitempty"`
+	LongContext   *LongContextPricing `json:"long_context,omitempty" yaml:"long-context,omitempty"`
 }
 
 // LongContextPricing describes token pricing when prompt tokens exceed the threshold.
 type LongContextPricing struct {
-	Threshold     int     `json:"threshold"`
-	Input         float64 `json:"input"`
-	Output        float64 `json:"output"`
-	Cached        float64 `json:"cached,omitempty"`
-	CacheCreation float64 `json:"cache_creation,omitempty"`
-	Reasoning     float64 `json:"reasoning,omitempty"`
+	Threshold     int     `json:"threshold" yaml:"threshold,omitempty"`
+	Input         float64 `json:"input" yaml:"input,omitempty"`
+	Output        float64 `json:"output" yaml:"output,omitempty"`
+	Cached        float64 `json:"cached,omitempty" yaml:"cached,omitempty"`
+	CacheCreation float64 `json:"cache_creation,omitempty" yaml:"cache-creation,omitempty"`
+	Reasoning     float64 `json:"reasoning,omitempty" yaml:"reasoning,omitempty"`
 }
 
 type availableModelsCacheEntry struct {
@@ -671,14 +671,7 @@ func cloneModelInfo(model *ModelInfo) *ModelInfo {
 		}
 		copyModel.Thinking = &copyThinking
 	}
-	if model.Pricing != nil {
-		copyPricing := *model.Pricing
-		if model.Pricing.LongContext != nil {
-			copyLong := *model.Pricing.LongContext
-			copyPricing.LongContext = &copyLong
-		}
-		copyModel.Pricing = &copyPricing
-	}
+	copyModel.Pricing = model.Pricing.Clone()
 	if model.Config != nil {
 		copyConfig := *model.Config
 		if len(model.Config.OverrideHeader) > 0 {
