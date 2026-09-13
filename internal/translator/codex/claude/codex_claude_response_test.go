@@ -513,6 +513,50 @@ func TestConvertCodexResponseToClaude_StreamSignatureOnlyReasoningEmitsThinkingS
 	}
 }
 
+func TestConvertOpenAIResponsesResponseToClaudeNonStreamWrapsBareResponseObject(t *testing.T) {
+	ctx := context.Background()
+	originalRequest := []byte(`{"messages":[]}`)
+	bareResponse := []byte(`{
+		"id":"resp_bare",
+		"object":"response",
+		"model":"openai.gpt-5.6-luna",
+		"status":"completed",
+		"usage":{"input_tokens":10,"output_tokens":5},
+		"output":[{"type":"message","content":[{"type":"output_text","text":"PONG"}]}]
+	}`)
+
+	out := ConvertOpenAIResponsesResponseToClaudeNonStream(ctx, "", originalRequest, nil, bareResponse, nil)
+	parsed := gjson.ParseBytes(out)
+	if got := parsed.Get("type").String(); got != "message" {
+		t.Fatalf("type = %q, want message; out=%s", got, out)
+	}
+	if got := parsed.Get("content.0.text").String(); got != "PONG" {
+		t.Fatalf("content text = %q, want PONG; out=%s", got, out)
+	}
+	if got := parsed.Get("id").String(); got != "resp_bare" {
+		t.Fatalf("id = %q, want resp_bare", got)
+	}
+}
+
+func TestConvertOpenAIResponsesResponseToClaudeNonStreamKeepsWrappedEvent(t *testing.T) {
+	ctx := context.Background()
+	originalRequest := []byte(`{"messages":[]}`)
+	wrapped := []byte(`{
+		"type":"response.completed",
+		"response":{
+			"id":"resp_wrapped",
+			"model":"openai.gpt-5.6-luna",
+			"usage":{"input_tokens":1,"output_tokens":2},
+			"output":[{"type":"message","content":[{"type":"output_text","text":"ok"}]}]
+		}
+	}`)
+
+	out := ConvertOpenAIResponsesResponseToClaudeNonStream(ctx, "", originalRequest, nil, wrapped, nil)
+	if got := gjson.GetBytes(out, "id").String(); got != "resp_wrapped" {
+		t.Fatalf("id = %q, want resp_wrapped; out=%s", got, out)
+	}
+}
+
 func TestConvertCodexResponseToClaudeNonStream_ThinkingIncludesSignature(t *testing.T) {
 	ctx := context.Background()
 	originalRequest := []byte(`{"messages":[]}`)

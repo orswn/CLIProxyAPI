@@ -10,6 +10,23 @@ import (
 	"github.com/tidwall/sjson"
 )
 
+func TestConvertClaudeRequestToOpenAIResponsesHonorsStream(t *testing.T) {
+	input := []byte(`{"model":"claude-test","messages":[{"role":"user","content":"hello"}]}`)
+
+	streaming := ConvertClaudeRequestToOpenAIResponses("openai.gpt-5.6-luna", input, true)
+	if !gjson.GetBytes(streaming, "stream").Bool() {
+		t.Fatalf("stream = false, want true: %s", streaming)
+	}
+
+	nonStreaming := ConvertClaudeRequestToOpenAIResponses("openai.gpt-5.6-luna", input, false)
+	if gjson.GetBytes(nonStreaming, "stream").Bool() {
+		t.Fatalf("stream = true, want false: %s", nonStreaming)
+	}
+	if !gjson.GetBytes(nonStreaming, "input").IsArray() {
+		t.Fatalf("Responses input missing: %s", nonStreaming)
+	}
+}
+
 func TestConvertClaudeRequestToCodex_SystemMessageScenarios(t *testing.T) {
 	tests := []struct {
 		name             string

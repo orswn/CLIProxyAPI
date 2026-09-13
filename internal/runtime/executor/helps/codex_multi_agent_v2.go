@@ -89,6 +89,8 @@ func TranslateRequestWithAPIKeyModelCompatibility(ctx context.Context, headers h
 	switch {
 	case from == sdktranslator.FormatClaude && to == sdktranslator.FormatCodex:
 		translated = codexclaude.ConvertClaudeRequestToCodexWithCompat(model, payload, stream)
+	case from == sdktranslator.FormatClaude && to == sdktranslator.FormatOpenAIResponse:
+		translated = codexclaude.ConvertClaudeRequestToOpenAIResponsesWithCompat(model, payload, stream)
 	case from == sdktranslator.FormatClaude && to == sdktranslator.FormatGemini:
 		translated = geminiclaude.ConvertClaudeRequestToGeminiWithCompat(model, payload, stream)
 	case from == sdktranslator.FormatClaude && to == sdktranslator.FormatInteractions:

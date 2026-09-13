@@ -27,7 +27,7 @@ func TestBedrockMantleRequestToFormatMatchesWireProtocol(t *testing.T) {
 	}{
 		{name: "Responses", source: sdktranslator.FormatOpenAIResponse, want: sdktranslator.FormatOpenAIResponse},
 		{name: "Chat Completions", source: sdktranslator.FormatOpenAI, want: sdktranslator.FormatOpenAI},
-		{name: "Claude", source: sdktranslator.FormatClaude, want: sdktranslator.FormatOpenAI},
+		{name: "Claude", source: sdktranslator.FormatClaude, want: sdktranslator.FormatOpenAIResponse},
 	}
 
 	for _, tt := range tests {
@@ -258,6 +258,168 @@ func TestBedrockMantleResponsesExecutionUsesNativeEndpoint(t *testing.T) {
 	}
 	if got := gjson.GetBytes(resp.Payload, "id").String(); got != "resp_test" {
 		t.Fatalf("response id = %q, want resp_test; payload: %s", got, resp.Payload)
+	}
+}
+
+func TestBedrockMantleClaudeExecutionUsesResponsesEndpoint(t *testing.T) {
+	cfg := &config.Config{SDKConfig: config.SDKConfig{BedrockMantle: []config.BedrockMantleConfig{{
+		AccessKeyID:     "AKIA-EXAMPLE",
+		SecretAccessKey: "SECRET-EXAMPLE",
+		DefaultRegion:   "us-east-1",
+	}}}}
+	exec := NewBedrockMantleExecutor(cfg)
+	auth := &cliproxyauth.Auth{Attributes: map[string]string{
+		"access_key_id":     "AKIA-EXAMPLE",
+		"secret_access_key": "SECRET-EXAMPLE",
+	}}
+
+	var upstreamPath string
+	var upstreamBody []byte
+	roundTripper := bedrockMantleRoundTripperFunc(func(req *http.Request) (*http.Response, error) {
+		upstreamPath = req.URL.Path
+		var errRead error
+		upstreamBody, errRead = io.ReadAll(req.Body)
+		if errRead != nil {
+			t.Fatalf("read upstream body: %v", errRead)
+		}
+		return &http.Response{
+			StatusCode: http.StatusOK,
+			Header:     http.Header{"Content-Type": []string{"application/json"}},
+			Body: io.NopCloser(strings.NewReader(`{
+				"id":"resp_claude",
+				"object":"response",
+				"model":"openai.gpt-5.6-luna",
+				"status":"completed",
+				"output":[{"type":"message","role":"assistant","content":[{"type":"output_text","text":"PONG"}]}],
+				"usage":{"input_tokens":10,"output_tokens":5,"total_tokens":15}
+			}`)),
+		}, nil
+	})
+	ctx := context.WithValue(context.Background(), "cliproxy.roundtripper", http.RoundTripper(roundTripper))
+	payload := []byte(`{
+		"model":"openai.gpt-5.6-luna",
+		"system":"Use tools when needed.",
+		"messages":[{"role":"user","content":"Say PONG."}],
+		"tools":[{"name":"get_word","description":"Get a word","input_schema":{"type":"object"}}],
+		"thinking":{"type":"enabled","budget_tokens":4096},
+		"stream":false
+	}`)
+
+	resp, err := exec.Execute(ctx, auth, cliproxyexecutor.Request{
+		Model:   "openai.gpt-5.6-luna",
+		Payload: payload,
+	}, cliproxyexecutor.Options{
+		SourceFormat:    sdktranslator.FormatClaude,
+		ResponseFormat:  sdktranslator.FormatClaude,
+		OriginalRequest: payload,
+	})
+	if err != nil {
+		t.Fatalf("Execute failed: %v", err)
+	}
+	if upstreamPath != "/openai/v1/responses" {
+		t.Fatalf("upstream path = %q, want %q", upstreamPath, "/openai/v1/responses")
+	}
+	if !gjson.GetBytes(upstreamBody, "input").Exists() || gjson.GetBytes(upstreamBody, "messages").Exists() {
+		t.Fatalf("upstream body is not Responses format: %s", upstreamBody)
+	}
+	if gjson.GetBytes(upstreamBody, "stream").Bool() {
+		t.Fatalf("non-stream request enabled upstream streaming: %s", upstreamBody)
+	}
+	if got := gjson.GetBytes(upstreamBody, "reasoning.effort").String(); got != "medium" {
+		t.Fatalf("reasoning effort = %q, want medium", got)
+	}
+	if got := gjson.GetBytes(resp.Payload, "content.0.text").String(); got != "PONG" {
+		t.Fatalf("Claude response text = %q, want PONG; payload: %s", got, resp.Payload)
+	}
+}
+
+func TestBedrockMantleClaudeStreamEmitsClaudeEvents(t *testing.T) {
+	cfg := &config.Config{SDKConfig: config.SDKConfig{BedrockMantle: []config.BedrockMantleConfig{{
+		AccessKeyID:     "AKIA-EXAMPLE",
+		SecretAccessKey: "SECRET-EXAMPLE",
+		DefaultRegion:   "us-east-1",
+	}}}}
+	exec := NewBedrockMantleExecutor(cfg)
+	auth := &cliproxyauth.Auth{Attributes: map[string]string{
+		"access_key_id":     "AKIA-EXAMPLE",
+		"secret_access_key": "SECRET-EXAMPLE",
+	}}
+
+	var upstreamPath string
+	var upstreamBody []byte
+	roundTripper := bedrockMantleRoundTripperFunc(func(req *http.Request) (*http.Response, error) {
+		upstreamPath = req.URL.Path
+		var errRead error
+		upstreamBody, errRead = io.ReadAll(req.Body)
+		if errRead != nil {
+			t.Fatalf("read upstream body: %v", errRead)
+		}
+		stream := strings.Join([]string{
+			"event: response.created",
+			`data: {"type":"response.created","response":{"id":"resp_claude_stream","model":"openai.gpt-5.6-luna","status":"in_progress"}}`,
+			"",
+			"event: response.output_item.added",
+			`data: {"type":"response.output_item.added","output_index":0,"item":{"type":"message","status":"in_progress"}}`,
+			"",
+			"event: response.output_text.delta",
+			`data: {"type":"response.output_text.delta","output_index":0,"delta":"PONG"}`,
+			"",
+			"event: response.completed",
+			`data: {"type":"response.completed","response":{"id":"resp_claude_stream","status":"completed","usage":{"input_tokens":10,"output_tokens":5,"total_tokens":15}}}`,
+			"",
+		}, "\n")
+		return &http.Response{
+			StatusCode: http.StatusOK,
+			Header:     http.Header{"Content-Type": []string{"text/event-stream"}},
+			Body:       io.NopCloser(strings.NewReader(stream)),
+		}, nil
+	})
+	ctx := context.WithValue(context.Background(), "cliproxy.roundtripper", http.RoundTripper(roundTripper))
+	payload := []byte(`{
+		"model":"openai.gpt-5.6-luna",
+		"messages":[{"role":"user","content":"Say PONG."}],
+		"tools":[{"name":"get_word","description":"Get a word","input_schema":{"type":"object"}}],
+		"thinking":{"type":"enabled","budget_tokens":4096},
+		"stream":true
+	}`)
+
+	result, err := exec.ExecuteStream(ctx, auth, cliproxyexecutor.Request{
+		Model:   "openai.gpt-5.6-luna",
+		Payload: payload,
+	}, cliproxyexecutor.Options{
+		SourceFormat:    sdktranslator.FormatClaude,
+		ResponseFormat:  sdktranslator.FormatClaude,
+		OriginalRequest: payload,
+		Stream:          true,
+	})
+	if err != nil {
+		t.Fatalf("ExecuteStream failed: %v", err)
+	}
+
+	var joined strings.Builder
+	for chunk := range result.Chunks {
+		if chunk.Err != nil {
+			t.Fatalf("stream chunk failed: %v", chunk.Err)
+		}
+		joined.Write(chunk.Payload)
+	}
+	if upstreamPath != "/openai/v1/responses" {
+		t.Fatalf("upstream path = %q, want %q", upstreamPath, "/openai/v1/responses")
+	}
+	if !gjson.GetBytes(upstreamBody, "stream").Bool() {
+		t.Fatalf("upstream stream flag missing: %s", upstreamBody)
+	}
+	if !gjson.GetBytes(upstreamBody, "tools.0.name").Exists() {
+		t.Fatalf("tools missing from Responses body: %s", upstreamBody)
+	}
+	if gjson.GetBytes(upstreamBody, "reasoning_effort").Exists() {
+		t.Fatalf("Chat Completions reasoning_effort leaked into Responses body: %s", upstreamBody)
+	}
+	out := joined.String()
+	for _, want := range []string{"event: message_start", "event: content_block_delta", "PONG", "event: message_stop"} {
+		if !strings.Contains(out, want) {
+			t.Fatalf("Claude stream missing %q: %s", want, out)
+		}
 	}
 }
 

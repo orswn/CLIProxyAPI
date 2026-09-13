@@ -67,7 +67,7 @@ func (e *BedrockMantleExecutor) Identifier() string { return "bedrock-mantle" }
 
 // RequestToFormat reports the upstream request format used after auth selection.
 func (e *BedrockMantleExecutor) RequestToFormat(_ cliproxyexecutor.Request, opts cliproxyexecutor.Options) sdktranslator.Format {
-	if opts.SourceFormat == sdktranslator.FormatOpenAIResponse {
+	if opts.SourceFormat == sdktranslator.FormatOpenAIResponse || opts.SourceFormat == sdktranslator.FormatClaude {
 		return sdktranslator.FormatOpenAIResponse
 	}
 	return sdktranslator.FormatOpenAI

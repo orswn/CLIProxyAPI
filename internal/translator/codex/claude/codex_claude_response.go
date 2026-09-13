@@ -344,6 +344,23 @@ func codexStreamErrorToClaudeError(rootResult gjson.Result) []byte {
 	return translatorcommon.AppendSSEEventBytes(nil, "error", out, 2)
 }
 
+// ConvertOpenAIResponsesResponseToClaudeNonStream converts an OpenAI Response object to Claude format.
+func ConvertOpenAIResponsesResponseToClaudeNonStream(ctx context.Context, modelName string, originalRequestRawJSON, requestRawJSON, rawJSON []byte, param *any) []byte {
+	typeStr := gjson.GetBytes(rawJSON, "type").String()
+	if typeStr == "response.completed" || typeStr == "response.incomplete" {
+		return ConvertCodexResponseToClaudeNonStream(ctx, modelName, originalRequestRawJSON, requestRawJSON, rawJSON, param)
+	}
+
+	eventType := "response.completed"
+	if gjson.GetBytes(rawJSON, "status").String() == "incomplete" {
+		eventType = "response.incomplete"
+	}
+	wrapped := []byte(`{"type":"","response":{}}`)
+	wrapped, _ = sjson.SetBytes(wrapped, "type", eventType)
+	wrapped, _ = sjson.SetRawBytes(wrapped, "response", rawJSON)
+	return ConvertCodexResponseToClaudeNonStream(ctx, modelName, originalRequestRawJSON, requestRawJSON, wrapped, param)
+}
+
 // ConvertCodexResponseToClaudeNonStream converts a non-streaming Codex response to a non-streaming Claude Code response.
 // This function processes the complete Codex response and transforms it into a single Claude Code-compatible
 // JSON response. It handles message content, tool calls, reasoning content, and usage metadata, combining all

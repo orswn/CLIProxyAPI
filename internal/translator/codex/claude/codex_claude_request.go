@@ -51,6 +51,23 @@ func ConvertClaudeRequestToCodexWithCompat(modelName string, inputRawJSON []byte
 	return convertClaudeRequestToCodex(modelName, inputRawJSON, stream, true)
 }
 
+// ConvertClaudeRequestToOpenAIResponses converts a Claude request to OpenAI Responses format.
+func ConvertClaudeRequestToOpenAIResponses(modelName string, inputRawJSON []byte, stream bool) []byte {
+	return convertClaudeRequestToOpenAIResponses(modelName, inputRawJSON, stream, false)
+}
+
+// ConvertClaudeRequestToOpenAIResponsesWithCompat preserves assistant thinking blocks with
+// empty or unknown-format signatures for configured compatibility endpoints.
+func ConvertClaudeRequestToOpenAIResponsesWithCompat(modelName string, inputRawJSON []byte, stream bool) []byte {
+	return convertClaudeRequestToOpenAIResponses(modelName, inputRawJSON, stream, true)
+}
+
+func convertClaudeRequestToOpenAIResponses(modelName string, inputRawJSON []byte, stream bool, preserveEmptyThinkingBlocks bool) []byte {
+	out := convertClaudeRequestToCodex(modelName, inputRawJSON, stream, preserveEmptyThinkingBlocks)
+	out, _ = sjson.SetBytes(out, "stream", stream)
+	return out
+}
+
 func convertClaudeRequestToCodex(modelName string, inputRawJSON []byte, _ bool, preserveEmptyThinkingBlocks bool) []byte {
 	rawJSON := inputRawJSON
 
