@@ -22,6 +22,7 @@ import (
 	cliproxyexecutor "github.com/router-for-me/CLIProxyAPI/v7/sdk/cliproxy/executor"
 	sdktranslator "github.com/router-for-me/CLIProxyAPI/v7/sdk/translator"
 	log "github.com/sirupsen/logrus"
+	"github.com/tidwall/gjson"
 	"github.com/tidwall/sjson"
 )
 
@@ -186,19 +187,13 @@ func (e *BedrockMantleExecutor) resolveRegion(auth *cliproxyauth.Auth, modelName
 	return bedrockmantle.DefaultBedrockRegion
 }
 
-// prepareResponsesPayload applies the shared Responses input hygiene and drops
-// conversation state Mantle cannot resolve. Bedrock does not persist responses,
-// so a previous_response_id carried over from another provider only produces an
-// upstream error.
+// prepareResponsesPayload applies the shared Responses input hygiene before a
+// Responses request reaches Mantle.
 func (e *BedrockMantleExecutor) prepareResponsesPayload(ctx context.Context, payload []byte, to sdktranslator.Format) []byte {
 	if to != sdktranslator.FormatOpenAIResponse {
 		return payload
 	}
-	payload = prepareOpenAIResponsesInput(ctx, "bedrock mantle", payload)
-	if updated, errDelete := sjson.DeleteBytes(payload, "previous_response_id"); errDelete == nil {
-		payload = updated
-	}
-	return payload
+	return prepareOpenAIResponsesInput(ctx, "bedrock mantle", payload)
 }
 
 func (e *BedrockMantleExecutor) sanitizeMantlePayload(payload []byte, modelName string) []byte {
@@ -208,6 +203,73 @@ func (e *BedrockMantleExecutor) sanitizeMantlePayload(payload []byte, modelName 
 		payload, _ = sjson.DeleteBytes(payload, "max_output_tokens")
 	}
 	return payload
+}
+
+// sendMantleRequest builds, signs and sends one Mantle request. Signing covers
+// the payload hash, so every attempt needs a freshly signed request.
+func (e *BedrockMantleExecutor) sendMantleRequest(ctx context.Context, auth *cliproxyauth.Auth, httpClient *http.Client, creds util.AwsCredentials, region, endpointURL string, payload []byte, stream bool) (*http.Response, error) {
+	httpReq, errNew := http.NewRequestWithContext(ctx, http.MethodPost, endpointURL, bytes.NewReader(payload))
+	if errNew != nil {
+		return nil, errNew
+	}
+	httpReq.Header.Set("Content-Type", "application/json")
+	httpReq.Header.Set("User-Agent", "cli-proxy-bedrock-mantle")
+	if stream {
+		httpReq.Header.Set("Accept", "text/event-stream")
+		httpReq.Header.Set("Cache-Control", "no-cache")
+	}
+	if errSign := util.SignAwsRequest(httpReq, creds, region, "bedrock-mantle", payload, time.Now()); errSign != nil {
+		return nil, fmt.Errorf("bedrock mantle sigv4 signing failed: %w", errSign)
+	}
+
+	var authID, authLabel, authType, authValue string
+	if auth != nil {
+		authID = auth.ID
+		authLabel = auth.Label
+		authType, authValue = auth.AccountInfo()
+	}
+	helps.RecordAPIRequest(ctx, e.cfg, helps.UpstreamRequestLog{
+		URL:       endpointURL,
+		Method:    http.MethodPost,
+		Headers:   httpReq.Header.Clone(),
+		Body:      payload,
+		Provider:  e.Identifier(),
+		AuthID:    authID,
+		AuthLabel: authLabel,
+		AuthType:  authType,
+		AuthValue: authValue,
+	})
+
+	httpResp, errDo := httpClient.Do(httpReq)
+	if errDo != nil {
+		helps.RecordAPIResponseError(ctx, e.cfg, errDo)
+		return nil, errDo
+	}
+	return httpResp, nil
+}
+
+// mantleRetryWithoutPreviousResponse reports whether a failed request can be
+// retried without its conversation reference. Mantle stores its own responses,
+// so the field stays untouched until the upstream reports that the referenced
+// response does not exist, which is what happens when a session moves to Mantle
+// from another provider.
+func mantleRetryWithoutPreviousResponse(ctx context.Context, payload []byte, statusCode int, responseBody []byte) ([]byte, bool) {
+	if statusCode != http.StatusNotFound {
+		return nil, false
+	}
+	if strings.TrimSpace(gjson.GetBytes(payload, "previous_response_id").String()) == "" {
+		return nil, false
+	}
+	message := strings.ToLower(string(responseBody))
+	if !strings.Contains(message, "not_found") && !strings.Contains(message, "not found") {
+		return nil, false
+	}
+	retryPayload, errDelete := sjson.DeleteBytes(payload, "previous_response_id")
+	if errDelete != nil {
+		return nil, false
+	}
+	helps.LogWithRequestID(ctx).Debugf("bedrock mantle: retrying without previous_response_id after upstream reported it missing")
+	return retryPayload, true
 }
 
 // PrepareRequest does not perform signing because AWS SigV4 requires the request payload hash.
@@ -272,41 +334,12 @@ func (e *BedrockMantleExecutor) Execute(ctx context.Context, auth *cliproxyauth.
 	translated = e.prepareResponsesPayload(ctx, translated, to)
 	reporter.SetTranslatedReasoningEffort(translated, to.String())
 
-	httpReq, err := http.NewRequestWithContext(ctx, http.MethodPost, endpointURL, bytes.NewReader(translated))
-	if err != nil {
-		return resp, err
-	}
-	httpReq.Header.Set("Content-Type", "application/json")
-	httpReq.Header.Set("User-Agent", "cli-proxy-bedrock-mantle")
-
-	if errSign := util.SignAwsRequest(httpReq, creds, region, "bedrock-mantle", translated, time.Now()); errSign != nil {
-		return resp, fmt.Errorf("bedrock mantle sigv4 signing failed: %w", errSign)
-	}
-
-	var authID, authLabel, authType, authValue string
-	if auth != nil {
-		authID = auth.ID
-		authLabel = auth.Label
-		authType, authValue = auth.AccountInfo()
-	}
-	helps.RecordAPIRequest(ctx, e.cfg, helps.UpstreamRequestLog{
-		URL:       endpointURL,
-		Method:    http.MethodPost,
-		Headers:   httpReq.Header.Clone(),
-		Body:      translated,
-		Provider:  e.Identifier(),
-		AuthID:    authID,
-		AuthLabel: authLabel,
-		AuthType:  authType,
-		AuthValue: authValue,
-	})
-
 	httpClient := e.getHTTPClient(ctx, auth)
 	httpClient = reporter.TrackHTTPClient(httpClient)
-	httpResp, err := httpClient.Do(httpReq)
-	if err != nil {
-		helps.RecordAPIResponseError(ctx, e.cfg, err)
-		return resp, err
+
+	httpResp, errSend := e.sendMantleRequest(ctx, auth, httpClient, creds, region, endpointURL, translated, false)
+	if errSend != nil {
+		return resp, errSend
 	}
 	defer func() {
 		if errClose := httpResp.Body.Close(); errClose != nil {
@@ -319,8 +352,27 @@ func (e *BedrockMantleExecutor) Execute(ctx context.Context, auth *cliproxyauth.
 		b, _ := io.ReadAll(httpResp.Body)
 		helps.AppendAPIResponseChunk(ctx, e.cfg, b)
 		helps.LogWithRequestID(ctx).Debugf("bedrock mantle request error, status: %d, message: %s", httpResp.StatusCode, string(b))
-		err = newOpenAICompatStatusError(httpResp.StatusCode, httpResp.Header, b)
-		return resp, err
+		retryPayload, shouldRetry := mantleRetryWithoutPreviousResponse(ctx, translated, httpResp.StatusCode, b)
+		if !shouldRetry {
+			err = newOpenAICompatStatusError(httpResp.StatusCode, httpResp.Header, b)
+			return resp, err
+		}
+		if errClose := httpResp.Body.Close(); errClose != nil {
+			log.Errorf("bedrock mantle executor: close response body error: %v", errClose)
+		}
+		translated = retryPayload
+		httpResp, errSend = e.sendMantleRequest(ctx, auth, httpClient, creds, region, endpointURL, translated, false)
+		if errSend != nil {
+			return resp, errSend
+		}
+		helps.RecordAPIResponseMetadata(ctx, e.cfg, httpResp.StatusCode, httpResp.Header.Clone())
+		if httpResp.StatusCode < 200 || httpResp.StatusCode >= 300 {
+			retryBody, _ := io.ReadAll(httpResp.Body)
+			helps.AppendAPIResponseChunk(ctx, e.cfg, retryBody)
+			helps.LogWithRequestID(ctx).Debugf("bedrock mantle request error, status: %d, message: %s", httpResp.StatusCode, string(retryBody))
+			err = newOpenAICompatStatusError(httpResp.StatusCode, httpResp.Header, retryBody)
+			return resp, err
+		}
 	}
 
 	body, err := io.ReadAll(httpResp.Body)
@@ -389,43 +441,12 @@ func (e *BedrockMantleExecutor) ExecuteStream(ctx context.Context, auth *cliprox
 	}
 	reporter.SetTranslatedReasoningEffort(translated, to.String())
 
-	httpReq, err := http.NewRequestWithContext(ctx, http.MethodPost, endpointURL, bytes.NewReader(translated))
-	if err != nil {
-		return nil, err
-	}
-	httpReq.Header.Set("Content-Type", "application/json")
-	httpReq.Header.Set("Accept", "text/event-stream")
-	httpReq.Header.Set("Cache-Control", "no-cache")
-	httpReq.Header.Set("User-Agent", "cli-proxy-bedrock-mantle")
-
-	if errSign := util.SignAwsRequest(httpReq, creds, region, "bedrock-mantle", translated, time.Now()); errSign != nil {
-		return nil, fmt.Errorf("bedrock mantle sigv4 signing failed: %w", errSign)
-	}
-
-	var authID, authLabel, authType, authValue string
-	if auth != nil {
-		authID = auth.ID
-		authLabel = auth.Label
-		authType, authValue = auth.AccountInfo()
-	}
-	helps.RecordAPIRequest(ctx, e.cfg, helps.UpstreamRequestLog{
-		URL:       endpointURL,
-		Method:    http.MethodPost,
-		Headers:   httpReq.Header.Clone(),
-		Body:      translated,
-		Provider:  e.Identifier(),
-		AuthID:    authID,
-		AuthLabel: authLabel,
-		AuthType:  authType,
-		AuthValue: authValue,
-	})
-
 	httpClient := e.getHTTPClient(ctx, auth)
 	httpClient = reporter.TrackHTTPClient(httpClient)
-	httpResp, err := httpClient.Do(httpReq)
-	if err != nil {
-		helps.RecordAPIResponseError(ctx, e.cfg, err)
-		return nil, err
+
+	httpResp, errSend := e.sendMantleRequest(ctx, auth, httpClient, creds, region, endpointURL, translated, true)
+	if errSend != nil {
+		return nil, errSend
 	}
 	helps.RecordAPIResponseMetadata(ctx, e.cfg, httpResp.StatusCode, httpResp.Header.Clone())
 	if httpResp.StatusCode < 200 || httpResp.StatusCode >= 300 {
@@ -435,8 +456,27 @@ func (e *BedrockMantleExecutor) ExecuteStream(ctx context.Context, auth *cliprox
 		if errClose := httpResp.Body.Close(); errClose != nil {
 			log.Errorf("bedrock mantle executor: close response body error: %v", errClose)
 		}
-		err = newOpenAICompatStatusError(httpResp.StatusCode, httpResp.Header, b)
-		return nil, err
+		retryPayload, shouldRetry := mantleRetryWithoutPreviousResponse(ctx, translated, httpResp.StatusCode, b)
+		if !shouldRetry {
+			err = newOpenAICompatStatusError(httpResp.StatusCode, httpResp.Header, b)
+			return nil, err
+		}
+		translated = retryPayload
+		httpResp, errSend = e.sendMantleRequest(ctx, auth, httpClient, creds, region, endpointURL, translated, true)
+		if errSend != nil {
+			return nil, errSend
+		}
+		helps.RecordAPIResponseMetadata(ctx, e.cfg, httpResp.StatusCode, httpResp.Header.Clone())
+		if httpResp.StatusCode < 200 || httpResp.StatusCode >= 300 {
+			retryBody, _ := io.ReadAll(httpResp.Body)
+			helps.AppendAPIResponseChunk(ctx, e.cfg, retryBody)
+			helps.LogWithRequestID(ctx).Debugf("bedrock mantle request error, status: %d, message: %s", httpResp.StatusCode, string(retryBody))
+			if errClose := httpResp.Body.Close(); errClose != nil {
+				log.Errorf("bedrock mantle executor: close response body error: %v", errClose)
+			}
+			err = newOpenAICompatStatusError(httpResp.StatusCode, httpResp.Header, retryBody)
+			return nil, err
+		}
 	}
 
 	out := make(chan cliproxyexecutor.StreamChunk)

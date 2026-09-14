@@ -194,6 +194,9 @@ func (r *Registry) TranslateStream(ctx context.Context, from, to Format, model s
 			outputs[i] = hooks.NormalizeResponseAfter(ctx, from, to, model, originalRequestRawJSON, requestRawJSON, output, true)
 		}
 	}
+	for i, output := range outputs {
+		outputs[i] = preserveUpstreamUsageCost(body, output)
+	}
 	return outputs
 }
 
@@ -221,7 +224,7 @@ func (r *Registry) TranslateNonStream(ctx context.Context, from, to Format, mode
 	if hooks != nil {
 		body = hooks.NormalizeResponseAfter(ctx, from, to, model, originalRequestRawJSON, requestRawJSON, body, false)
 	}
-	return body
+	return preserveUpstreamUsageCost(rawJSON, body)
 }
 
 // TranslateTokenCount applies the registered token count response translator.
