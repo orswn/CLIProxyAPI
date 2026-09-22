@@ -1,7 +1,7 @@
 package helps
 
 import (
-	"fmt"
+	"bytes"
 	"strings"
 
 	"github.com/router-for-me/CLIProxyAPI/v7/internal/config"
@@ -12,7 +12,8 @@ import (
 
 const (
 	openAIToolResultImageOmittedText = "[image omitted: unsupported by upstream]"
-	openAIToolResultImageRelayText   = "Images returned by the preceding tool call(s):"
+	claudeToolResultImageRelayNotice = "Images returned by the preceding tool call(s):"
+	claudeToolResultImagePlaceholder = "[Tool returned image content; the images follow in the next user message.]"
 )
 
 // ShouldNormalizeOpenAIToolResultsForModel reports whether the selected model
@@ -29,7 +30,8 @@ func ShouldNormalizeOpenAIToolResultsForModel(compat *config.OpenAICompatibility
 	return normalize
 }
 
-// NormalizeOpenAIToolResultsTextOnly converts tool message content to strings.
+// NormalizeOpenAIToolResultsTextOnly converts tool message content to strings
+// and strips relayed tool result images for text-only compatibility models.
 // Text parts are preserved and image parts are replaced with a short marker.
 func NormalizeOpenAIToolResultsTextOnly(payload []byte) []byte {
 	messages := gjson.GetBytes(payload, "messages")
@@ -37,80 +39,111 @@ func NormalizeOpenAIToolResultsTextOnly(payload []byte) []byte {
 		return payload
 	}
 
-	out := payload
-	messageIndex := 0
-	messages.ForEach(func(_, message gjson.Result) bool {
-		if message.Get("role").String() == "tool" {
-			content := message.Get("content")
+	rawList := messages.Array()
+	if len(rawList) == 0 {
+		return payload
+	}
+
+	newMessages := make([][]byte, 0, len(rawList))
+	replacedPlaceholderInCurrentTurn := false
+
+	for i := 0; i < len(rawList); i++ {
+		msg := rawList[i]
+		role := msg.Get("role").String()
+		msgBytes := []byte(msg.Raw)
+
+		switch role {
+		case "tool":
+			content := msg.Get("content")
 			if content.Exists() && content.Type != gjson.String {
-				path := fmt.Sprintf("messages.%d.content", messageIndex)
-				if updated, errSet := sjson.SetBytes(out, path, flattenOpenAIToolResultContent(content)); errSet == nil {
-					out = updated
+				if updated, errSet := sjson.SetBytes(msgBytes, "content", flattenOpenAIToolResultContent(content)); errSet == nil {
+					msgBytes = updated
+				}
+			} else if content.Exists() && content.Type == gjson.String && content.String() == claudeToolResultImagePlaceholder {
+				if updated, errSet := sjson.SetBytes(msgBytes, "content", openAIToolResultImageOmittedText); errSet == nil {
+					msgBytes = updated
+					replacedPlaceholderInCurrentTurn = true
 				}
 			}
-		}
-		messageIndex++
-		return true
-	})
-	return removeOpenAIToolResultImageRelays(out)
-}
+			newMessages = append(newMessages, msgBytes)
 
-func removeOpenAIToolResultImageRelays(payload []byte) []byte {
-	messages := gjson.GetBytes(payload, "messages")
-	if !messages.Exists() || !messages.IsArray() {
-		return payload
-	}
+		case "user":
+			content := msg.Get("content")
+			if content.IsArray() {
+				var remainingParts []string
+				hasRelayNotice := false
+				hasImages := false
 
-	normalized := make([]string, 0, len(messages.Array()))
-	changed := false
-	messages.ForEach(func(_, message gjson.Result) bool {
-		if isOpenAIToolResultImageRelay(message) && len(normalized) > 0 {
-			previous := gjson.Parse(normalized[len(normalized)-1])
-			if previous.Get("role").String() == "tool" {
-				content := previous.Get("content").String()
-				if content != "" {
-					content += "\n\n"
-				}
-				content += openAIToolResultImageOmittedText
-				if updated, errSet := sjson.Set(previous.Raw, "content", content); errSet == nil {
-					normalized[len(normalized)-1] = updated
-					changed = true
+				content.ForEach(func(_, part gjson.Result) bool {
+					if part.IsObject() {
+						if part.Get("type").String() == "text" && part.Get("text").String() == claudeToolResultImageRelayNotice {
+							hasRelayNotice = true
+							return true
+						}
+						if isOpenAIImageToolResultPart(part) {
+							hasImages = true
+							return true
+						}
+					}
+					remainingParts = append(remainingParts, part.Raw)
 					return true
+				})
+
+				if hasRelayNotice && hasImages {
+					if !replacedPlaceholderInCurrentTurn {
+						for j := len(newMessages) - 1; j >= 0; j-- {
+							prevRole := gjson.GetBytes(newMessages[j], "role").String()
+							if prevRole != "tool" {
+								break
+							}
+							prevContent := gjson.GetBytes(newMessages[j], "content").String()
+							if !strings.Contains(prevContent, openAIToolResultImageOmittedText) {
+								newContent := prevContent + "\n\n" + openAIToolResultImageOmittedText
+								if prevContent == "" {
+									newContent = openAIToolResultImageOmittedText
+								}
+								if updated, errSet := sjson.SetBytes(newMessages[j], "content", newContent); errSet == nil {
+									newMessages[j] = updated
+								}
+							}
+							break
+						}
+					}
+					replacedPlaceholderInCurrentTurn = false
+
+					if len(remainingParts) == 0 {
+						// Synthetic relay message contained only relayed images; omit entirely.
+						continue
+					}
+
+					rawArray := "[" + strings.Join(remainingParts, ",") + "]"
+					if updated, errSetRaw := sjson.SetRawBytes(msgBytes, "content", []byte(rawArray)); errSetRaw == nil {
+						msgBytes = updated
+					}
 				}
 			}
-		}
-		normalized = append(normalized, message.Raw)
-		return true
-	})
-	if !changed {
-		return payload
-	}
+			newMessages = append(newMessages, msgBytes)
 
-	updated, errSet := sjson.SetRawBytes(payload, "messages", []byte("["+strings.Join(normalized, ",")+"]"))
-	if errSet != nil {
-		return payload
-	}
-	return updated
-}
-
-func isOpenAIToolResultImageRelay(message gjson.Result) bool {
-	if message.Get("role").String() != "user" {
-		return false
-	}
-	content := message.Get("content")
-	if !content.IsArray() {
-		return false
-	}
-	parts := content.Array()
-	if len(parts) < 2 || parts[0].Get("type").String() != "text" || parts[0].Get("text").String() != openAIToolResultImageRelayText {
-		return false
-	}
-	for _, part := range parts[1:] {
-		if isOpenAIImageToolResultPart(part) {
-			return true
+		default:
+			replacedPlaceholderInCurrentTurn = false
+			newMessages = append(newMessages, msgBytes)
 		}
 	}
-	return false
+
+	var buf bytes.Buffer
+	buf.WriteByte('[')
+	for i, m := range newMessages {
+		if i > 0 {
+			buf.WriteByte(',')
+		}
+		buf.Write(m)
+	}
+	buf.WriteByte(']')
+
+	if updated, errSetRaw := sjson.SetRawBytes(payload, "messages", buf.Bytes()); errSetRaw == nil {
+		return updated
+	}
+	return payload
 }
 
 func openAICompatibilityModelExcludesImages(models []config.OpenAICompatibilityModel, model string) (bool, bool) {

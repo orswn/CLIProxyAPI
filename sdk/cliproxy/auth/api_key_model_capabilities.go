@@ -206,6 +206,10 @@ func compileAPIKeyModelCapabilitiesForAuth(cfg *internalconfig.Config, auth *Aut
 		if entry := resolveBedrockMantleConfigForAuth(cfg, auth); entry != nil {
 			compileOpenAICompatibleModelCapabilities(out, entry.Models)
 		}
+	case "meta":
+		if entry := resolveMetaAPIKeyConfig(cfg, auth); entry != nil {
+			compileConfiguredModelCapabilities(out, entry.Models, "meta")
+		}
 	default:
 		providerKey, compatName := "", ""
 		if auth.Attributes != nil {
