@@ -61,6 +61,7 @@ func (e *ClaudeExecutor) Execute(ctx context.Context, auth *cliproxyauth.Auth, r
 		originalPayloadSource = opts.OriginalRequest
 	}
 	originalPayload := originalPayloadSource
+	originalReasoningEffort := thinking.ExtractReasoningEffort(originalPayload, from.String(), req.Model)
 	incomingHeaders, claudeCodeDetection := detectIncomingClaudeCodeRequest(ctx, opts.Headers, originalPayload, false, e.cfg)
 	confirmedClaudeCode := claudeCodeDetection.Confirmed
 	claudeSessionID := ""
@@ -155,7 +156,9 @@ func (e *ClaudeExecutor) Execute(ctx context.Context, auth *cliproxyauth.Auth, r
 		opts.Headers,
 		"context_management",
 		"fallbacks",
+		"thinking",
 		"thinking.display",
+		"output_config.effort",
 		"diagnostics",
 	)
 	contextManagementState.payloadRuleTouched = touchedPayloadPaths["context_management"]
@@ -199,8 +202,16 @@ func (e *ClaudeExecutor) Execute(ctx context.Context, auth *cliproxyauth.Auth, r
 		isProbeOrHelper,
 	)
 	body = ensureModelMaxTokens(body, baseModel)
+	body = reconcileClaudeOpus55ModelRewrite(
+		body,
+		baseModel,
+		originalReasoningEffort,
+		touchedPayloadPaths["thinking"] || touchedPayloadPaths["output_config.effort"],
+	)
 
-	// Disable thinking if tool_choice forces tool use (Anthropic API constraint)
+	if isAnthropicUpstreamBase(baseURL) {
+		body = normalizeClaudeOpus55Request(body)
+	}
 	body = disableThinkingIfToolChoiceForced(body)
 	body = reconcileClaudeCodeContextManagement(body, contextManagementState)
 	body = normalizeClaudeSamplingForUpstream(body, confirmedClaudeCode)

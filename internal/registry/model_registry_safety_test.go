@@ -1,6 +1,7 @@
 package registry
 
 import (
+	"reflect"
 	"testing"
 	"time"
 )
@@ -194,6 +195,23 @@ func TestLookupModelInfoIncludesClaudeSonnet5(t *testing.T) {
 		if model.Thinking.Levels[i] != level {
 			t.Fatalf("Claude Sonnet 5 thinking levels = %+v, want %+v", model.Thinking.Levels, expectedLevels)
 		}
+	}
+}
+
+func TestLookupModelInfoIncludesClaudeOpus55(t *testing.T) {
+	model := LookupModelInfo("claude-opus-5-5")
+	if model == nil {
+		t.Fatal("expected Claude Opus 5.5 static model")
+	}
+	if model.Type != "claude" || model.ContextLength != 1000000 || model.MaxCompletionTokens != 128000 {
+		t.Fatalf("unexpected Claude Opus 5.5 metadata: %+v", model)
+	}
+	if model.Thinking == nil || model.Thinking.ZeroAllowed || !model.Thinking.DynamicAllowed || model.Thinking.Min != 0 || model.Thinking.Max != 0 {
+		t.Fatalf("expected always-on dynamic level-only thinking, got %+v", model.Thinking)
+	}
+	expectedLevels := []string{"low", "medium", "high", "xhigh", "max"}
+	if !reflect.DeepEqual(model.Thinking.Levels, expectedLevels) {
+		t.Fatalf("Claude Opus 5.5 thinking levels = %+v, want %+v", model.Thinking.Levels, expectedLevels)
 	}
 }
 

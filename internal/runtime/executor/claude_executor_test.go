@@ -2329,6 +2329,63 @@ func TestClaudeExecutor_LegacySystemReminderAcrossMessagesAndStream(t *testing.T
 	}
 }
 
+func TestClaudeExecutor_CountTokensUpstreamNormalizesOpus55ToolChoice(t *testing.T) {
+	tests := []struct {
+		name     string
+		choice   string
+		toolName string
+		wantType string
+	}{
+		{name: "specific tool", choice: "tool", toolName: "search", wantType: "auto"},
+		{name: "any", choice: "any", wantType: "auto"},
+		{name: "auto", choice: "auto", wantType: "auto"},
+		{name: "none", choice: "none", wantType: "none"},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			var upstreamBody []byte
+			transport := roundTripperFunc(func(req *http.Request) (*http.Response, error) {
+				var errRead error
+				upstreamBody, errRead = io.ReadAll(req.Body)
+				if errRead != nil {
+					t.Fatal(errRead)
+				}
+				return &http.Response{
+					StatusCode: http.StatusOK,
+					Header:     http.Header{"Content-Type": []string{"application/json"}},
+					Body:       io.NopCloser(strings.NewReader(`{"input_tokens":7}`)),
+					Request:    req,
+				}, nil
+			})
+			ctx := context.WithValue(context.Background(), "cliproxy.roundtripper", http.RoundTripper(transport))
+			auth := &cliproxyauth.Auth{Attributes: map[string]string{"api_key": "sk-ant-api-test"}}
+			toolChoice := `{"type":"` + test.choice + `"}`
+			if test.toolName != "" {
+				toolChoice = `{"type":"` + test.choice + `","name":"` + test.toolName + `"}`
+			}
+			payload := []byte(`{"model":"claude-opus-5-5","messages":[{"role":"user","content":"search"}],"thinking":{"type":"adaptive"},"tools":[{"name":"search","input_schema":{"type":"object"}}],"tool_choice":` + toolChoice + `}`)
+
+			_, errCount := NewClaudeExecutor(&config.Config{}).countTokensUpstream(ctx, auth, cliproxyexecutor.Request{
+				Model:   "claude-opus-5-5",
+				Payload: payload,
+			}, cliproxyexecutor.Options{SourceFormat: sdktranslator.FormatClaude})
+			if errCount != nil {
+				t.Fatalf("countTokensUpstream() error = %v", errCount)
+			}
+			if got := gjson.GetBytes(upstreamBody, "tool_choice.type").String(); got != test.wantType {
+				t.Fatalf("count_tokens tool_choice.type = %q, want %q; body=%s", got, test.wantType, upstreamBody)
+			}
+			if test.choice == "tool" && gjson.GetBytes(upstreamBody, "tool_choice.name").Exists() {
+				t.Fatalf("count_tokens tool_choice.name must be absent; body=%s", upstreamBody)
+			}
+			if got := gjson.GetBytes(upstreamBody, "thinking.type").String(); got != "adaptive" {
+				t.Fatalf("count_tokens thinking.type = %q, want adaptive; body=%s", got, upstreamBody)
+			}
+		})
+	}
+}
+
 func TestClaudeExecutor_CountTokensUpstreamCloakNeverPreservesCustomTool(t *testing.T) {
 	var upstreamBody []byte
 	var upstreamHeaders http.Header
@@ -7060,6 +7117,265 @@ func TestClaudeExecutor_PayloadCustomReportingOutcomesPreservedOnRewrite(t *test
 	}
 	if !hasCustom {
 		t.Fatalf("custom user system prompt must NOT be deleted, got: %s", gjson.GetBytes(seenBody, "system").Raw)
+	}
+}
+
+func executeClaudeDirectAnthropicRequest(t *testing.T, cfg *config.Config, request cliproxyexecutor.Request, stream bool) []byte {
+	t.Helper()
+	var upstreamBody []byte
+	transport := roundTripperFunc(func(req *http.Request) (*http.Response, error) {
+		var errRead error
+		upstreamBody, errRead = io.ReadAll(req.Body)
+		if errRead != nil {
+			t.Fatal(errRead)
+		}
+		responseBody := `{"id":"msg_test","type":"message","role":"assistant","model":"claude-opus-5-5","content":[{"type":"text","text":"ok"}],"stop_reason":"end_turn","usage":{"input_tokens":1,"output_tokens":1}}`
+		contentType := "application/json"
+		if stream {
+			responseBody = "event: message_start\ndata: {\"type\":\"message_start\",\"message\":{\"id\":\"msg_test\",\"type\":\"message\",\"role\":\"assistant\",\"model\":\"claude-opus-5-5\",\"content\":[],\"usage\":{\"input_tokens\":1,\"output_tokens\":0}}}\n\nevent: message_stop\ndata: {\"type\":\"message_stop\"}\n\n"
+			contentType = "text/event-stream"
+		}
+		return &http.Response{
+			StatusCode: http.StatusOK,
+			Header:     http.Header{"Content-Type": []string{contentType}},
+			Body:       io.NopCloser(strings.NewReader(responseBody)),
+			Request:    req,
+		}, nil
+	})
+	ctx := context.WithValue(context.Background(), "cliproxy.roundtripper", http.RoundTripper(transport))
+	auth := &cliproxyauth.Auth{Attributes: map[string]string{"api_key": "sk-ant-api-test"}}
+	executor := NewClaudeExecutor(cfg)
+	options := cliproxyexecutor.Options{SourceFormat: sdktranslator.FormatClaude}
+	if stream {
+		result, errStream := executor.ExecuteStream(ctx, auth, request, options)
+		if errStream != nil {
+			t.Fatalf("ExecuteStream() error = %v", errStream)
+		}
+		for chunk := range result.Chunks {
+			if chunk.Err != nil {
+				t.Fatalf("stream chunk error = %v", chunk.Err)
+			}
+		}
+	} else if _, errExecute := executor.Execute(ctx, auth, request, options); errExecute != nil {
+		t.Fatalf("Execute() error = %v", errExecute)
+	}
+	return upstreamBody
+}
+
+func TestClaudeExecutorReconcilesOpus55AfterPayloadRules(t *testing.T) {
+	modelRules := func(model string) []config.PayloadModelRule {
+		return []config.PayloadModelRule{{Name: model, Protocol: "claude"}}
+	}
+	tests := []struct {
+		name           string
+		cfg            *config.Config
+		request        cliproxyexecutor.Request
+		wantModel      string
+		wantToolChoice string
+		wantToolName   string
+		wantThinking   string
+		wantEffort     string
+	}{
+		{
+			name: "original forced choice",
+			cfg:  &config.Config{},
+			request: cliproxyexecutor.Request{
+				Model:   "claude-opus-5-5",
+				Payload: []byte(`{"model":"claude-opus-5-5","messages":[{"role":"user","content":"search"}],"thinking":{"type":"adaptive"},"tool_choice":{"type":"any"}}`),
+			},
+			wantModel:      "claude-opus-5-5",
+			wantToolChoice: "auto",
+			wantThinking:   "adaptive",
+		},
+		{
+			name: "payload any choice",
+			cfg: &config.Config{Payload: config.PayloadConfig{Override: []config.PayloadRule{{
+				Models: modelRules("claude-opus-5-5"),
+				Params: map[string]any{"tool_choice.type": "any"},
+			}}}},
+			request: cliproxyexecutor.Request{
+				Model:   "claude-opus-5-5",
+				Payload: []byte(`{"model":"claude-opus-5-5","messages":[{"role":"user","content":"search"}],"thinking":{"type":"adaptive"},"tool_choice":{"type":"auto"}}`),
+			},
+			wantModel:      "claude-opus-5-5",
+			wantToolChoice: "auto",
+			wantThinking:   "adaptive",
+		},
+		{
+			name: "payload specific tool choice",
+			cfg: &config.Config{Payload: config.PayloadConfig{Override: []config.PayloadRule{{
+				Models: modelRules("claude-opus-5-5"),
+				Params: map[string]any{"tool_choice": map[string]any{"type": "tool", "name": "search"}},
+			}}}},
+			request: cliproxyexecutor.Request{
+				Model:   "claude-opus-5-5",
+				Payload: []byte(`{"model":"claude-opus-5-5","messages":[{"role":"user","content":"search"}],"thinking":{"type":"adaptive"},"tool_choice":{"type":"auto"}}`),
+			},
+			wantModel:      "claude-opus-5-5",
+			wantToolChoice: "auto",
+			wantThinking:   "adaptive",
+		},
+		{
+			name: "rewrite into Opus 5.5",
+			cfg: &config.Config{Payload: config.PayloadConfig{Override: []config.PayloadRule{{
+				Models: modelRules("claude-opus-5"),
+				Params: map[string]any{"model": "claude-opus-5-5"},
+			}}}},
+			request: cliproxyexecutor.Request{
+				Model:   "claude-opus-5",
+				Payload: []byte(`{"model":"claude-opus-5","messages":[{"role":"user","content":"search"}],"thinking":{"type":"disabled"}}`),
+			},
+			wantModel:    "claude-opus-5-5",
+			wantThinking: "adaptive",
+			wantEffort:   "low",
+		},
+		{
+			name: "rewrite away from Opus 5.5",
+			cfg: &config.Config{Payload: config.PayloadConfig{Override: []config.PayloadRule{{
+				Models: modelRules("claude-opus-5-5"),
+				Params: map[string]any{"model": "claude-opus-5"},
+			}}}},
+			request: cliproxyexecutor.Request{
+				Model:   "claude-opus-5-5",
+				Payload: []byte(`{"model":"claude-opus-5-5","messages":[{"role":"user","content":"search"}],"thinking":{"type":"disabled"}}`),
+			},
+			wantModel:    "claude-opus-5",
+			wantThinking: "disabled",
+		},
+		{
+			name: "rewrite away with thinking override",
+			cfg: &config.Config{Payload: config.PayloadConfig{Override: []config.PayloadRule{{
+				Models: modelRules("claude-opus-5-5"),
+				Params: map[string]any{
+					"model":                "claude-opus-5",
+					"thinking.type":        "adaptive",
+					"output_config.effort": "high",
+				},
+			}}}},
+			request: cliproxyexecutor.Request{
+				Model:   "claude-opus-5-5",
+				Payload: []byte(`{"model":"claude-opus-5-5","messages":[{"role":"user","content":"search"}],"thinking":{"type":"disabled"}}`),
+			},
+			wantModel:    "claude-opus-5",
+			wantThinking: "adaptive",
+			wantEffort:   "high",
+		},
+	}
+
+	for _, test := range tests {
+		for _, stream := range []bool{false, true} {
+			name := test.name + " execute"
+			if stream {
+				name = test.name + " stream"
+			}
+			t.Run(name, func(t *testing.T) {
+				body := executeClaudeDirectAnthropicRequest(t, test.cfg, test.request, stream)
+				if got := gjson.GetBytes(body, "model").String(); got != test.wantModel {
+					t.Fatalf("model = %q, want %q; body=%s", got, test.wantModel, body)
+				}
+				if got := gjson.GetBytes(body, "tool_choice.type").String(); got != test.wantToolChoice {
+					t.Fatalf("tool_choice.type = %q, want %q; body=%s", got, test.wantToolChoice, body)
+				}
+				if got := gjson.GetBytes(body, "tool_choice.name").String(); got != test.wantToolName {
+					t.Fatalf("tool_choice.name = %q, want %q; body=%s", got, test.wantToolName, body)
+				}
+				if got := gjson.GetBytes(body, "thinking.type").String(); got != test.wantThinking {
+					t.Fatalf("thinking.type = %q, want %q; body=%s", got, test.wantThinking, body)
+				}
+				if got := gjson.GetBytes(body, "output_config.effort").String(); got != test.wantEffort {
+					t.Fatalf("output_config.effort = %q, want %q; body=%s", got, test.wantEffort, body)
+				}
+			})
+		}
+	}
+}
+
+func TestClaudeExecutorDoesNotNormalizeOpus55ForcedToolChoiceForCustomGateway(t *testing.T) {
+	var upstreamBody []byte
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		upstreamBody, _ = io.ReadAll(r.Body)
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"id":"msg_test","type":"message","role":"assistant","model":"claude-opus-5-5","content":[{"type":"text","text":"ok"}],"usage":{"input_tokens":1,"output_tokens":1}}`))
+	}))
+	defer server.Close()
+
+	auth := &cliproxyauth.Auth{Attributes: map[string]string{"api_key": "custom-key", "base_url": server.URL}}
+	request := cliproxyexecutor.Request{
+		Model:   "claude-opus-5-5",
+		Payload: []byte(`{"model":"claude-opus-5-5","messages":[{"role":"user","content":"search"}],"thinking":{"type":"disabled"},"tool_choice":{"type":"any"}}`),
+	}
+	_, errExecute := NewClaudeExecutor(&config.Config{}).Execute(context.Background(), auth, request, cliproxyexecutor.Options{SourceFormat: sdktranslator.FormatClaude})
+	if errExecute != nil {
+		t.Fatalf("Execute() error = %v", errExecute)
+	}
+	if got := gjson.GetBytes(upstreamBody, "tool_choice.type").String(); got != "any" {
+		t.Fatalf("custom gateway tool_choice.type = %q, want any; body=%s", got, upstreamBody)
+	}
+	if got := gjson.GetBytes(upstreamBody, "thinking"); got.Exists() {
+		t.Fatalf("custom gateway thinking = %s, want existing forced-tool behavior", got.Raw)
+	}
+}
+
+func TestNormalizeClaudeOpus55Request(t *testing.T) {
+	tests := []struct {
+		name           string
+		payload        string
+		wantToolChoice string
+		wantToolName   string
+		wantThinking   string
+		wantEffort     string
+	}{
+		{
+			name:           "any becomes auto",
+			payload:        `{"model":"claude-opus-5-5","thinking":{"type":"adaptive"},"tool_choice":{"type":"any","disable_parallel_tool_use":true}}`,
+			wantToolChoice: "auto",
+			wantThinking:   "adaptive",
+		},
+		{
+			name:           "specific tool becomes auto",
+			payload:        `{"model":"claude-opus-5-5","tool_choice":{"type":"tool","name":"search"}}`,
+			wantToolChoice: "auto",
+		},
+		{
+			name:         "disabled becomes low adaptive",
+			payload:      `{"model":"claude-opus-5-5","thinking":{"type":"disabled"}}`,
+			wantThinking: "adaptive",
+			wantEffort:   "low",
+		},
+		{
+			name:         "manual budget becomes adaptive effort",
+			payload:      `{"model":"claude-opus-5-5","thinking":{"type":"enabled","budget_tokens":8192},"output_config":{"effort":"low"}}`,
+			wantThinking: "adaptive",
+			wantEffort:   "medium",
+		},
+		{
+			name:           "Opus 5 remains unchanged",
+			payload:        `{"model":"claude-opus-5","thinking":{"type":"adaptive"},"tool_choice":{"type":"tool","name":"search"}}`,
+			wantToolChoice: "tool",
+			wantToolName:   "search",
+			wantThinking:   "adaptive",
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			out := normalizeClaudeOpus55Request([]byte(test.payload))
+			if got := gjson.GetBytes(out, "tool_choice.type").String(); got != test.wantToolChoice {
+				t.Fatalf("tool_choice.type = %q, want %q; body=%s", got, test.wantToolChoice, out)
+			}
+			if got := gjson.GetBytes(out, "tool_choice.name").String(); got != test.wantToolName {
+				t.Fatalf("tool_choice.name = %q, want %q; body=%s", got, test.wantToolName, out)
+			}
+			if got := gjson.GetBytes(out, "thinking.type").String(); got != test.wantThinking {
+				t.Fatalf("thinking.type = %q, want %q; body=%s", got, test.wantThinking, out)
+			}
+			if got := gjson.GetBytes(out, "output_config.effort").String(); got != test.wantEffort {
+				t.Fatalf("output_config.effort = %q, want %q; body=%s", got, test.wantEffort, out)
+			}
+			if gjson.GetBytes(out, "thinking.budget_tokens").Exists() {
+				t.Fatalf("thinking.budget_tokens must be absent; body=%s", out)
+			}
+		})
 	}
 }
 

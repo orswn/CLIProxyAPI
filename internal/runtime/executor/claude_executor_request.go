@@ -22,7 +22,9 @@ import (
 	"github.com/router-for-me/CLIProxyAPI/v7/internal/buildinfo"
 	"github.com/router-for-me/CLIProxyAPI/v7/internal/config"
 	"github.com/router-for-me/CLIProxyAPI/v7/internal/misc"
+	"github.com/router-for-me/CLIProxyAPI/v7/internal/registry"
 	"github.com/router-for-me/CLIProxyAPI/v7/internal/runtime/executor/helps"
+	"github.com/router-for-me/CLIProxyAPI/v7/internal/thinking"
 	"github.com/router-for-me/CLIProxyAPI/v7/internal/util"
 	cliproxyauth "github.com/router-for-me/CLIProxyAPI/v7/sdk/cliproxy/auth"
 	cliproxyexecutor "github.com/router-for-me/CLIProxyAPI/v7/sdk/cliproxy/executor"
@@ -591,9 +593,66 @@ func extractAndRemoveBetas(body []byte) ([]string, []byte) {
 	return betas, body
 }
 
-// disableThinkingIfToolChoiceForced checks if tool_choice forces tool use and disables thinking.
-// Anthropic API does not allow thinking when tool_choice is set to "any" or a specific tool.
-// See: https://docs.anthropic.com/en/docs/build-with-claude/extended-thinking#important-considerations
+func reconcileClaudeOpus55ModelRewrite(body []byte, originalModel, originalEffort string, thinkingOverridden bool) []byte {
+	if thinkingOverridden || !strings.EqualFold(strings.TrimSpace(originalModel), "claude-opus-5-5") || originalEffort != string(thinking.LevelNone) {
+		return body
+	}
+	finalModel := strings.TrimSpace(gjson.GetBytes(body, "model").String())
+	if strings.EqualFold(finalModel, "claude-opus-5-5") {
+		return body
+	}
+	modelInfo := registry.LookupModelInfo(finalModel, "claude")
+	if modelInfo == nil || modelInfo.Thinking == nil || !modelInfo.Thinking.ZeroAllowed {
+		return body
+	}
+	body, _ = sjson.SetBytes(body, "thinking.type", "disabled")
+	body, _ = sjson.DeleteBytes(body, "thinking.budget_tokens")
+	body, _ = sjson.DeleteBytes(body, "thinking.display")
+	body, _ = sjson.DeleteBytes(body, "output_config.effort")
+	if outputConfig := gjson.GetBytes(body, "output_config"); outputConfig.Exists() && outputConfig.IsObject() && len(outputConfig.Map()) == 0 {
+		body, _ = sjson.DeleteBytes(body, "output_config")
+	}
+	return body
+}
+
+func normalizeClaudeOpus55Request(body []byte) []byte {
+	if !strings.EqualFold(strings.TrimSpace(gjson.GetBytes(body, "model").String()), "claude-opus-5-5") {
+		return body
+	}
+
+	switch strings.ToLower(strings.TrimSpace(gjson.GetBytes(body, "thinking.type").String())) {
+	case "disabled":
+		body, _ = sjson.SetBytes(body, "thinking.type", "adaptive")
+		body, _ = sjson.DeleteBytes(body, "thinking.budget_tokens")
+		body, _ = sjson.SetBytes(body, "output_config.effort", "low")
+	case "enabled":
+		budget := gjson.GetBytes(body, "thinking.budget_tokens")
+		body, _ = sjson.SetBytes(body, "thinking.type", "adaptive")
+		body, _ = sjson.DeleteBytes(body, "thinking.budget_tokens")
+		if budget.Exists() {
+			level, ok := thinking.ConvertBudgetToLevel(int(budget.Int()))
+			if ok {
+				if level == string(thinking.LevelNone) || level == string(thinking.LevelMinimal) {
+					level = string(thinking.LevelLow)
+				}
+				if level == string(thinking.LevelAuto) {
+					body, _ = sjson.DeleteBytes(body, "output_config.effort")
+				} else {
+					body, _ = sjson.SetBytes(body, "output_config.effort", level)
+				}
+			}
+		}
+	}
+
+	switch strings.ToLower(strings.TrimSpace(gjson.GetBytes(body, "tool_choice.type").String())) {
+	case "any", "tool":
+		body, _ = sjson.SetBytes(body, "tool_choice.type", "auto")
+		body, _ = sjson.DeleteBytes(body, "tool_choice.name")
+	}
+	return body
+}
+
+// disableThinkingIfToolChoiceForced removes thinking for models that reject it with forced tool use.
 func disableThinkingIfToolChoiceForced(body []byte) []byte {
 	toolChoiceType := gjson.GetBytes(body, "tool_choice.type").String()
 	// "auto" is allowed with thinking, but "any" or "tool" (specific tool) are not
