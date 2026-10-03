@@ -7,7 +7,7 @@ import (
 	"regexp"
 	"strings"
 
-	"github.com/router-for-me/CLIProxyAPI/v7/internal/auth/bedrockmantle"
+	"github.com/router-for-me/CLIProxyAPI/v8/internal/auth/bedrockmantle"
 )
 
 var mantleRegionPattern = regexp.MustCompile(`^[a-z]{2}(-[a-z0-9]{1,16}){1,3}-[1-9][0-9]?$`)
