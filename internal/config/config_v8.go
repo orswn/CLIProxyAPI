@@ -571,6 +571,9 @@ func IsV8ConfigLayout(root *yaml.Node) bool {
 
 func v8AllowedRoots() map[string]bool {
 	allowed := map[string]bool{"config-version": true, "api-keys": true, "plugins": true, "quota-exceeded": true, "client": true}
+	// Fork-only root sections keep their legacy path in v8.
+	allowed["combos"] = true
+	allowed["bedrock-mantle"] = true
 	for _, path := range v8Paths {
 		section, _, _ := strings.Cut(path.current, ".")
 		allowed[section] = true

@@ -933,3 +933,29 @@ func TestV8SecretHashResolvesReferences(t *testing.T) {
 		})
 	}
 }
+
+func TestV8KeepsForkRootSections(t *testing.T) {
+	raw := []byte(`port: 8317
+combos:
+  - name: "boon/tier-0"
+    strategy: "fallback"
+    models: ["a/x", "b/y"]
+bedrock-mantle:
+  - name: "mantle"
+    default-region: "us-east-1"
+`)
+	migrated, _, err := NormalizeConfigLayout(raw, true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(string(migrated), "# combos:") || strings.Contains(string(migrated), "# bedrock-mantle:") {
+		t.Fatalf("fork sections were commented out:\n%s", migrated)
+	}
+	if err = ValidateV8Config(migrated); err != nil {
+		t.Fatalf("validate migrated fork sections: %v", err)
+	}
+	cfg, err := ParseConfigBytes(migrated)
+	if err != nil || len(cfg.Combos) != 1 || len(cfg.Combos[0].Models) != 2 || len(cfg.BedrockMantle) != 1 || cfg.BedrockMantle[0].DefaultRegion != "us-east-1" {
+		t.Fatalf("fork sections lost after migration: cfg=%+v error=%v", cfg, err)
+	}
+}
