@@ -13,12 +13,18 @@ import (
 func TestConvertClaudeRequestToOpenAIResponsesHonorsStream(t *testing.T) {
 	input := []byte(`{"model":"claude-test","messages":[{"role":"user","content":"hello"}]}`)
 
-	streaming := ConvertClaudeRequestToOpenAIResponses("openai.gpt-5.6-luna", input, true)
+	streaming, err := ConvertClaudeRequestToOpenAIResponses("openai.gpt-5.6-luna", input, true)
+	if err != nil {
+		t.Fatal(err)
+	}
 	if !gjson.GetBytes(streaming, "stream").Bool() {
 		t.Fatalf("stream = false, want true: %s", streaming)
 	}
 
-	nonStreaming := ConvertClaudeRequestToOpenAIResponses("openai.gpt-5.6-luna", input, false)
+	nonStreaming, err := ConvertClaudeRequestToOpenAIResponses("openai.gpt-5.6-luna", input, false)
+	if err != nil {
+		t.Fatal(err)
+	}
 	if gjson.GetBytes(nonStreaming, "stream").Bool() {
 		t.Fatalf("stream = true, want false: %s", nonStreaming)
 	}
@@ -90,7 +96,7 @@ func TestConvertClaudeRequestToCodex_SystemMessageScenarios(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result := ConvertClaudeRequestToCodex("test-model", []byte(tt.inputJSON), false)
+			result, _ := ConvertClaudeRequestToCodex("test-model", []byte(tt.inputJSON), false)
 			resultJSON := gjson.ParseBytes(result)
 			inputs := resultJSON.Get("input").Array()
 
@@ -132,7 +138,7 @@ func TestConvertClaudeRequestToCodex_MessageSystemRoleWrapsAsUserReminder(t *tes
 		]
 	}`
 
-	result := ConvertClaudeRequestToCodex("test-model", []byte(inputJSON), false)
+	result, _ := ConvertClaudeRequestToCodex("test-model", []byte(inputJSON), false)
 	inputs := gjson.GetBytes(result, "input").Array()
 	if len(inputs) != 5 {
 		t.Fatalf("got %d input items, want 5: %s", len(inputs), gjson.GetBytes(result, "input").Raw)
@@ -179,7 +185,7 @@ func TestConvertClaudeRequestToCodex_PreservesToolAdjacencyWithInterveningSystem
 		]
 	}`
 
-	result := ConvertClaudeRequestToCodex("gpt-5.4", []byte(inputJSON), false)
+	result, _ := ConvertClaudeRequestToCodex("gpt-5.4", []byte(inputJSON), false)
 	inputs := gjson.GetBytes(result, "input").Array()
 
 	// Expected item types:
@@ -249,7 +255,7 @@ func TestConvertClaudeRequestToCodex_ParallelToolCalls(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result := ConvertClaudeRequestToCodex("test-model", []byte(tt.inputJSON), false)
+			result, _ := ConvertClaudeRequestToCodex("test-model", []byte(tt.inputJSON), false)
 			resultJSON := gjson.ParseBytes(result)
 
 			if got := resultJSON.Get("parallel_tool_calls").Bool(); got != tt.wantParallelToolCalls {
@@ -323,7 +329,7 @@ func TestConvertClaudeRequestToCodex_ServiceTier(t *testing.T) {
 				inputJSON, _ = sjson.SetRawBytes(inputJSON, "speed", []byte(tt.speedJSON))
 			}
 
-			result := ConvertClaudeRequestToCodex("gpt-5.4", inputJSON, false)
+			result, _ := ConvertClaudeRequestToCodex("gpt-5.4", inputJSON, false)
 			serviceTierResult := gjson.GetBytes(result, "service_tier")
 			if serviceTierResult.Exists() != tt.wantExists {
 				t.Fatalf("service_tier exists = %v, want %v. Output: %s", serviceTierResult.Exists(), tt.wantExists, string(result))
@@ -357,7 +363,7 @@ func TestConvertClaudeRequestToCodex_ShortenLongToolUseIDs(t *testing.T) {
 		]
 	}`
 
-	result := ConvertClaudeRequestToCodex("test-model", []byte(inputJSON), false)
+	result, _ := ConvertClaudeRequestToCodex("test-model", []byte(inputJSON), false)
 	inputs := gjson.GetBytes(result, "input").Array()
 
 	var callID string
@@ -422,7 +428,7 @@ func TestConvertClaudeRequestToCodex_ToolChoiceModeMapping(t *testing.T) {
 				"messages": [{"role": "user", "content": "hello"}]
 			}`
 
-			result := ConvertClaudeRequestToCodex("test-model", []byte(inputJSON), false)
+			result, _ := ConvertClaudeRequestToCodex("test-model", []byte(inputJSON), false)
 			resultJSON := gjson.ParseBytes(result)
 
 			if got := resultJSON.Get("tool_choice").String(); got != tt.wantCodexToolChoice {
@@ -443,7 +449,7 @@ func TestConvertClaudeRequestToCodex_ToolChoiceSpecificFunctionUsesConvertedName
 		"messages": [{"role": "user", "content": "hello"}]
 	}`
 
-	result := ConvertClaudeRequestToCodex("test-model", []byte(inputJSON), false)
+	result, _ := ConvertClaudeRequestToCodex("test-model", []byte(inputJSON), false)
 	resultJSON := gjson.ParseBytes(result)
 
 	if got := resultJSON.Get("tool_choice.type").String(); got != "function" {
@@ -484,7 +490,7 @@ func TestConvertClaudeRequestToCodex_WebSearchSourcesInclude(t *testing.T) {
 					inputJSON += `,"tools":` + tt.tools
 				}
 				inputJSON += `}`
-				result := ConvertClaudeRequestToCodex("test-model", []byte(inputJSON), stream)
+				result, _ := ConvertClaudeRequestToCodex("test-model", []byte(inputJSON), stream)
 				wantInclude := `["reasoning.encrypted_content"]`
 				if tt.wantSources {
 					wantInclude = `["reasoning.encrypted_content","web_search_call.action.sources"]`
@@ -518,7 +524,7 @@ func TestConvertClaudeRequestToCodex_WebSearchToolMapping(t *testing.T) {
 		"messages": [{"role": "user", "content": "hello"}]
 	}`
 
-	result := ConvertClaudeRequestToCodex("test-model", []byte(inputJSON), false)
+	result, _ := ConvertClaudeRequestToCodex("test-model", []byte(inputJSON), false)
 	resultJSON := gjson.ParseBytes(result)
 
 	if got := resultJSON.Get("tools.0.type").String(); got != "web_search" {
@@ -549,7 +555,7 @@ func TestConvertClaudeRequestToCodex_WebSearchToolChoiceUsesDeclaredTypedToolNam
 		"messages": [{"role": "user", "content": "hello"}]
 	}`
 
-	result := ConvertClaudeRequestToCodex("test-model", []byte(inputJSON), false)
+	result, _ := ConvertClaudeRequestToCodex("test-model", []byte(inputJSON), false)
 	resultJSON := gjson.ParseBytes(result)
 
 	if got := resultJSON.Get("tool_choice.type").String(); got != "function" {
@@ -586,7 +592,7 @@ func TestConvertClaudeRequestToCodex_AssistantThinkingSignatureToReasoningItem(t
 		]
 	}`
 
-	result := ConvertClaudeRequestToCodex("test-model", []byte(inputJSON), false)
+	result, _ := ConvertClaudeRequestToCodex("test-model", []byte(inputJSON), false)
 	resultJSON := gjson.ParseBytes(result)
 	inputs := resultJSON.Get("input").Array()
 	if len(inputs) != 3 {
@@ -634,7 +640,7 @@ func TestConvertClaudeRequestToCodex_PreservesBase64PDFDocumentContent(t *testin
 		}]
 	}`
 
-	result := ConvertClaudeRequestToCodex("gpt-5.6-sol", []byte(inputJSON), false)
+	result, _ := ConvertClaudeRequestToCodex("gpt-5.6-sol", []byte(inputJSON), false)
 	content := gjson.GetBytes(result, "input.0.content").Array()
 	if len(content) != 3 {
 		t.Fatalf("got %d content items, want 3. Output: %s", len(content), result)
@@ -683,7 +689,7 @@ func TestConvertClaudeRequestToCodex_PreservesContentOrderAcrossToolAndReasoning
 		"tools": [{"name":"lookup","input_schema":{"type":"object"}}]
 	}`
 
-	result := ConvertClaudeRequestToCodex("gpt-5.4", []byte(inputJSON), false)
+	result, _ := ConvertClaudeRequestToCodex("gpt-5.4", []byte(inputJSON), false)
 	inputs := gjson.GetBytes(result, "input").Array()
 	if len(inputs) != 8 {
 		t.Fatalf("got %d input items, want 8. Output: %s", len(inputs), result)
@@ -721,7 +727,7 @@ func TestConvertClaudeRequestToCodex_AssistantGrokSignatureToReasoningItem(t *te
 	payload := []byte(`{"model":"grok-4.5","messages":[{"role":"assistant","content":[{"type":"thinking","thinking":"summary","signature":""},{"type":"text","text":"answer"}]},{"role":"user","content":"next"}]}`)
 	payload, _ = sjson.SetBytes(payload, "messages.0.content.0.signature", signature)
 
-	out := ConvertClaudeRequestToCodex("grok-4.5", payload, false)
+	out, _ := ConvertClaudeRequestToCodex("grok-4.5", payload, false)
 	reasoning := gjson.GetBytes(out, "input.0")
 	if reasoning.Get("type").String() != "reasoning" {
 		t.Fatalf("input.0 type = %q, want reasoning; output=%s", reasoning.Get("type").String(), out)
@@ -738,7 +744,7 @@ func TestConvertClaudeRequestToCodex_IgnoresGrokSignatureForNonGrokTargets(t *te
 
 	for _, modelName := range []string{"gpt-5.4", "claude-sonnet-4-6"} {
 		t.Run(modelName, func(t *testing.T) {
-			out := ConvertClaudeRequestToCodex(modelName, payload, false)
+			out, _ := ConvertClaudeRequestToCodex(modelName, payload, false)
 			if got := countRequestInputItemsByType(out, "reasoning"); got != 0 {
 				t.Fatalf("got %d reasoning items for non-Grok target, want 0; output=%s", got, out)
 			}
@@ -799,7 +805,7 @@ func TestConvertClaudeRequestToCodex_IgnoresNonCodexThinkingSignatures(t *testin
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result := ConvertClaudeRequestToCodex("test-model", []byte(tt.inputJSON), false)
+			result, _ := ConvertClaudeRequestToCodex("test-model", []byte(tt.inputJSON), false)
 			if got := countRequestInputItemsByType(result, "reasoning"); got != 0 {
 				t.Fatalf("got %d reasoning items, want 0. Output: %s", got, string(result))
 			}
@@ -848,7 +854,7 @@ func TestConvertClaudeRequestToCodex_OutputConfigFormat(t *testing.T) {
 			}
 		}`)
 
-		translated := ConvertClaudeRequestToCodex("gpt-5.4", payload, false)
+		translated, _ := ConvertClaudeRequestToCodex("gpt-5.4", payload, false)
 		root := gjson.ParseBytes(translated)
 
 		if !root.Get("text.format").Exists() {
@@ -886,7 +892,7 @@ func TestConvertClaudeRequestToCodex_OutputConfigFormat(t *testing.T) {
 			}
 		}`)
 
-		translated := ConvertClaudeRequestToCodex("gpt-5.4", payload, false)
+		translated, _ := ConvertClaudeRequestToCodex("gpt-5.4", payload, false)
 		root := gjson.ParseBytes(translated)
 
 		if got := root.Get("text.format.name").String(); got != "custom_schema" {
@@ -905,7 +911,7 @@ func TestConvertClaudeRequestToCodex_OutputConfigFormat(t *testing.T) {
 			]
 		}`)
 
-		translated := ConvertClaudeRequestToCodex("gpt-5.4", payload, false)
+		translated, _ := ConvertClaudeRequestToCodex("gpt-5.4", payload, false)
 		root := gjson.ParseBytes(translated)
 		if root.Get("text.format").Exists() {
 			t.Fatalf("expected no text.format in translated payload, got: %s", translated)
@@ -922,7 +928,7 @@ func TestConvertClaudeRequestToCodex_OutputConfigFormat(t *testing.T) {
 			]
 		}`)
 
-		translated := ConvertClaudeRequestToCodex("gpt-5.4", payload, false)
+		translated, _ := ConvertClaudeRequestToCodex("gpt-5.4", payload, false)
 		root := gjson.ParseBytes(translated)
 		if root.Get("text.format").Exists() {
 			t.Fatalf("expected no text.format in translated payload, got: %s", translated)
@@ -956,7 +962,7 @@ func TestConvertClaudeRequestToCodex_OutputConfigFormat(t *testing.T) {
 			}
 		}`)
 
-		translated := ConvertClaudeRequestToCodex("gpt-5.4", payload, false)
+		translated, _ := ConvertClaudeRequestToCodex("gpt-5.4", payload, false)
 		root := gjson.ParseBytes(translated)
 		if got := root.Get("text.format.strict").Bool(); got != false {
 			t.Errorf("expected text.format.strict to be false for non-strict-compatible schema, got %v (%s)", got, translated)
@@ -987,7 +993,7 @@ func TestConvertClaudeRequestToCodex_OutputConfigFormat(t *testing.T) {
 			}
 		}`)
 
-		translated := ConvertClaudeRequestToCodex("gpt-5.4", payload, false)
+		translated, _ := ConvertClaudeRequestToCodex("gpt-5.4", payload, false)
 		root := gjson.ParseBytes(translated)
 		if got := root.Get("text.format.strict").Bool(); !got {
 			t.Errorf("expected text.format.strict to stay true for strict-compatible schema, got %v (%s)", got, translated)
@@ -1154,7 +1160,7 @@ func TestConvertClaudeRequestToCodex_StripsNestedToolSchemaMeta(t *testing.T) {
 		}]
 	}`
 
-	translated := ConvertClaudeRequestToCodex("gpt-5", []byte(inputJSON), false)
+	translated, _ := ConvertClaudeRequestToCodex("gpt-5", []byte(inputJSON), false)
 	tools := gjson.GetBytes(translated, "tools").Array()
 	if len(tools) == 0 {
 		t.Fatalf("expected tools in translated payload, got: %s", translated)
@@ -1233,7 +1239,7 @@ func TestConvertClaudeRequestToCodex_StripsUnsupportedUnicodePropertyEscapePatte
 		}]
 	}`
 
-	translated := ConvertClaudeRequestToCodex("gpt-5.6", []byte(inputJSON), false)
+	translated, _ := ConvertClaudeRequestToCodex("gpt-5.6", []byte(inputJSON), false)
 	tools := gjson.GetBytes(translated, "tools").Array()
 	if len(tools) == 0 {
 		t.Fatalf("expected tools in translated payload, got: %s", translated)
@@ -1302,7 +1308,7 @@ func TestConvertClaudeRequestToCodex_StripsPatternPropertiesIncompatibleKeys(t *
 		}]
 	}`
 
-	translated := ConvertClaudeRequestToCodex("gpt-5.6", []byte(inputJSON), false)
+	translated, _ := ConvertClaudeRequestToCodex("gpt-5.6", []byte(inputJSON), false)
 	tools := gjson.GetBytes(translated, "tools").Array()
 	if len(tools) == 0 {
 		t.Fatalf("expected tools in translated payload, got: %s", translated)
