@@ -7,6 +7,7 @@ on:
   pull_request:
     branches:
       - main
+  workflow_dispatch:
 
 permissions:
   contents: read
@@ -31,3 +32,136 @@ jobs:
       - name: Build server binary
         run: |
           CGO_ENABLED=0 go build -v -o /dev/null ./cmd/server
+
+  image:
+    needs: test
+    if: github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    concurrency:
+      group: image-${{ github.ref }}
+      cancel-in-progress: true
+    permissions:
+      contents: read
+      packages: write
+    outputs:
+      image: ${{ steps.meta.outputs.repo }}@${{ steps.build.outputs.digest }}
+      commit: ${{ steps.meta.outputs.commit }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          fetch-depth: 0
+
+      # Release tags live upstream. Without them the version string falls back to an old fork tag.
+      - name: Read build metadata
+        id: meta
+        run: |
+          git fetch --quiet --tags https://github.com/router-for-me/CLIProxyAPI.git || true
+          {
+            echo "version=$(git describe --tags --always)"
+            echo "commit=$(git rev-parse --short=12 HEAD)"
+            echo "date=$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+            echo "repo=ghcr.io/${GITHUB_REPOSITORY,,}"
+          } >> "$GITHUB_OUTPUT"
+
+      - uses: docker/setup-buildx-action@e468171a9de216ec08956ac3ada2f0791b6bd435 # v3.11.1
+
+      - uses: docker/login-action@5e57cd118135c172c3672efd75eb46360885c0ef # v3.6.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push
+        id: build
+        uses: docker/build-push-action@263435318d21b8e681c14492fe198d362a7d2c83 # v6.18.0
+        with:
+          context: .
+          push: true
+          platforms: linux/amd64
+          provenance: false
+          tags: |
+            ${{ steps.meta.outputs.repo }}:${{ steps.meta.outputs.commit }}
+            ${{ steps.meta.outputs.repo }}:latest
+          build-args: |
+            VERSION=${{ steps.meta.outputs.version }}
+            COMMIT=${{ steps.meta.outputs.commit }}
+            BUILD_DATE=${{ steps.meta.outputs.date }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+  bump-infra:
+    needs: image
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check for the infra token
+        id: token
+        env:
+          TOKEN: ${{ secrets.INFRA_PR_TOKEN }}
+        run: |
+          if [ -z "$TOKEN" ]; then
+            echo "::notice::INFRA_PR_TOKEN is not set. Skipping the personal-infra pull request."
+            echo "present=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "present=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Checkout personal-infra
+        if: steps.token.outputs.present == 'true'
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          repository: orswn/personal-infra
+          token: ${{ secrets.INFRA_PR_TOKEN }}
+          path: infra
+
+      - name: Open the image pin pull request
+        if: steps.token.outputs.present == 'true'
+        working-directory: infra
+        env:
+          GH_TOKEN: ${{ secrets.INFRA_PR_TOKEN }}
+          IMAGE: ${{ needs.image.outputs.image }}
+          COMMIT: ${{ needs.image.outputs.commit }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          SOURCE_URL: ${{ github.server_url }}/${{ github.repository }}/commit/${{ github.sha }}
+        run: |
+          set -euo pipefail
+          defaults=roles/cliproxyapi/defaults/main.yaml
+          sed -i -E \
+            -e "s|^cliproxyapi_image: .*|cliproxyapi_image: ${IMAGE}|" \
+            -e "s|^cliproxyapi_source_commit: .*|cliproxyapi_source_commit: ${COMMIT}|" \
+            "$defaults"
+          if git diff --quiet; then
+            echo "::notice::personal-infra already pins ${IMAGE}."
+            exit 0
+          fi
+
+          branch="okka/pin-cliproxyapi-${COMMIT}"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git switch -c "$branch"
+          git commit -q -a -F - <<EOF
+          chore(cliproxyapi): pin the image build ${COMMIT}
+
+          Move the CLIProxyAPI image to the build of orswn/CLIProxyAPI
+          commit ${COMMIT}. CI built it and pushed it to GHCR.
+
+          Image: ${IMAGE}
+          Build: ${RUN_URL}
+          EOF
+          git push -f origin "$branch"
+
+          if gh pr view "$branch" --repo orswn/personal-infra >/dev/null 2>&1; then
+            echo "::notice::A pull request for ${branch} already exists."
+            exit 0
+          fi
+          cat > "$RUNNER_TEMP/pr-body.md" <<EOF
+          Pins CLIProxyAPI to the image that CI built from [${COMMIT}](${SOURCE_URL}).
+
+          - Image: \`${IMAGE}\`
+          - Build: ${RUN_URL}
+
+          A merge deploys it to eupheme through the deploy workflow.
+          EOF
+          gh pr create --repo orswn/personal-infra --base main --head "$branch" \
+            --title "chore(cliproxyapi): pin the image build ${COMMIT}" \
+            --body-file "$RUNNER_TEMP/pr-body.md"
