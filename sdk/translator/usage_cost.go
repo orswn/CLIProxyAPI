@@ -3,8 +3,7 @@ package translator
 import (
 	"bytes"
 
-	"github.com/tidwall/gjson"
-	"github.com/tidwall/sjson"
+	"github.com/MoeForge/moego/ojson"
 )
 
 // upstreamUsageCostFields lists the vendor usage fields that report the price of
@@ -39,7 +38,7 @@ func preserveUpstreamUsageCost(upstream, translated []byte) []byte {
 	payload := translated[start:end]
 	usagePath := ""
 	for _, path := range usageContainerPaths {
-		if gjson.GetBytes(payload, path).IsObject() {
+		if ojson.GetBytes(payload, path).IsObject() {
 			usagePath = path
 			break
 		}
@@ -50,10 +49,10 @@ func preserveUpstreamUsageCost(upstream, translated []byte) []byte {
 	changed := false
 	for field, raw := range values {
 		target := usagePath + "." + field
-		if gjson.GetBytes(payload, target).Exists() {
+		if ojson.GetBytes(payload, target).Exists() {
 			continue
 		}
-		updated, errSet := sjson.SetRawBytes(payload, target, raw)
+		updated, errSet := ojson.SetRawBytes(payload, target, raw)
 		if errSet != nil {
 			continue
 		}
@@ -74,13 +73,13 @@ func preserveUpstreamUsageCost(upstream, translated []byte) []byte {
 func upstreamUsageCostValues(payload []byte) map[string][]byte {
 	var values map[string][]byte
 	for _, usagePath := range usageContainerPaths {
-		usage := gjson.GetBytes(payload, usagePath)
+		usage := ojson.GetBytes(payload, usagePath)
 		if !usage.IsObject() {
 			continue
 		}
 		for _, field := range upstreamUsageCostFields {
 			node := usage.Get(field)
-			if !node.Exists() || node.Type == gjson.Null {
+			if !node.Exists() || node.Type == ojson.Null {
 				continue
 			}
 			if values == nil {
@@ -115,7 +114,7 @@ func sseJSONPayloadBounds(body []byte) (int, int, bool) {
 		return 0, 0, false
 	}
 	end++
-	if !gjson.ValidBytes(body[start:end]) {
+	if !ojson.ValidBytes(body[start:end]) {
 		return 0, 0, false
 	}
 	return start, end, true

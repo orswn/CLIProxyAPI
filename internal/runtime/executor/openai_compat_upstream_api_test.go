@@ -8,11 +8,11 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/MoeForge/moego/ojson"
 	"github.com/router-for-me/CLIProxyAPI/v8/internal/config"
 	cliproxyauth "github.com/router-for-me/CLIProxyAPI/v8/sdk/cliproxy/auth"
 	cliproxyexecutor "github.com/router-for-me/CLIProxyAPI/v8/sdk/cliproxy/executor"
 	sdktranslator "github.com/router-for-me/CLIProxyAPI/v8/sdk/translator"
-	"github.com/tidwall/gjson"
 )
 
 func newUpstreamAPITestAuth(baseURL string) *cliproxyauth.Auth {
@@ -65,19 +65,19 @@ func TestOpenAICompatExecutorResponsesUpstreamNonStream(t *testing.T) {
 	if gotPath != "/v1/responses" {
 		t.Fatalf("path = %q, want %q", gotPath, "/v1/responses")
 	}
-	if !gjson.GetBytes(gotBody, "input").Exists() {
+	if !ojson.GetBytes(gotBody, "input").Exists() {
 		t.Fatalf("expected input in body: %s", string(gotBody))
 	}
-	if gjson.GetBytes(gotBody, "messages").Exists() {
+	if ojson.GetBytes(gotBody, "messages").Exists() {
 		t.Fatalf("unexpected messages in body: %s", string(gotBody))
 	}
-	if gjson.GetBytes(gotBody, "stream").Exists() {
+	if ojson.GetBytes(gotBody, "stream").Exists() {
 		t.Fatalf("unexpected stream flag in non-stream body: %s", string(gotBody))
 	}
-	if gjson.GetBytes(gotBody, "model").String() != "accounts/fireworks/models/kimi-k3" {
+	if ojson.GetBytes(gotBody, "model").String() != "accounts/fireworks/models/kimi-k3" {
 		t.Fatalf("model = %s", string(gotBody))
 	}
-	if gjson.GetBytes(resp.Payload, "id").String() != "resp_1" {
+	if ojson.GetBytes(resp.Payload, "id").String() != "resp_1" {
 		t.Fatalf("payload = %s", string(resp.Payload))
 	}
 }
@@ -195,10 +195,10 @@ func TestOpenAICompatExecutorResponsesUpstreamStream(t *testing.T) {
 	if gotPath != "/v1/responses" {
 		t.Fatalf("path = %q, want %q", gotPath, "/v1/responses")
 	}
-	if gjson.GetBytes(gotBody, "stream_options").Exists() {
+	if ojson.GetBytes(gotBody, "stream_options").Exists() {
 		t.Fatalf("unexpected stream_options in responses body: %s", string(gotBody))
 	}
-	if !gjson.GetBytes(gotBody, "stream").Bool() {
+	if !ojson.GetBytes(gotBody, "stream").Bool() {
 		t.Fatalf("expected stream flag in responses body: %s", string(gotBody))
 	}
 
@@ -279,13 +279,13 @@ func TestOpenAICompatExecutorResponsesUpstreamTranslatesClaudeClient(t *testing.
 	if gotPath != "/v1/responses" {
 		t.Fatalf("path = %q, want %q", gotPath, "/v1/responses")
 	}
-	if !gjson.GetBytes(gotBody, "input").Exists() {
+	if !ojson.GetBytes(gotBody, "input").Exists() {
 		t.Fatalf("expected Responses input in body: %s", string(gotBody))
 	}
-	if gjson.GetBytes(gotBody, "messages").Exists() {
+	if ojson.GetBytes(gotBody, "messages").Exists() {
 		t.Fatalf("unexpected Chat Completions messages in body: %s", string(gotBody))
 	}
-	if gjson.GetBytes(resp.Payload, "type").String() != "message" {
+	if ojson.GetBytes(resp.Payload, "type").String() != "message" {
 		t.Fatalf("client payload was not translated back to Claude: %s", string(resp.Payload))
 	}
 }
@@ -309,7 +309,7 @@ func TestOpenAICompatExecutorResponsesUpstreamDedupesInputItemIDs(t *testing.T) 
 	}, cliproxyexecutor.Options{SourceFormat: sdktranslator.FormatOpenAIResponse}); err != nil {
 		t.Fatalf("Execute error: %v", err)
 	}
-	items := gjson.GetBytes(gotBody, "input").Array()
+	items := ojson.GetBytes(gotBody, "input").Array()
 	if len(items) != 3 {
 		t.Fatalf("items = %d, want 3: %s", len(items), gotBody)
 	}

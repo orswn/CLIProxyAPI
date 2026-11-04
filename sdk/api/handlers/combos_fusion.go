@@ -9,11 +9,10 @@ import (
 	"strings"
 	"sync"
 
+	"github.com/MoeForge/moego/ojson"
 	"github.com/gin-gonic/gin"
 	"github.com/router-for-me/CLIProxyAPI/v8/internal/config"
 	"github.com/router-for-me/CLIProxyAPI/v8/internal/interfaces"
-	"github.com/tidwall/gjson"
-	"github.com/tidwall/sjson"
 )
 
 const fusionAnswerMaxBytes = 64 * 1024
@@ -37,7 +36,7 @@ func fusionError(status int, message string) *interfaces.ErrorMessage {
 // Fusion is intentionally stateless text synthesis. Unsupported inputs fail
 // before any billed calls instead of silently losing tool/media semantics.
 func validateFusionRequest(protocol string, raw []byte, image bool) *interfaces.ErrorMessage {
-	if image || !gjson.ValidBytes(raw) || !gjson.ParseBytes(raw).IsObject() {
+	if image || !ojson.ValidBytes(raw) || !ojson.ParseBytes(raw).IsObject() {
 		return fusionError(http.StatusBadRequest, "fusion requires a JSON text-generation request")
 	}
 	field := ""
@@ -51,18 +50,18 @@ func validateFusionRequest(protocol string, raw []byte, image bool) *interfaces.
 	default:
 		return fusionError(http.StatusBadRequest, "fusion does not support this protocol")
 	}
-	input := gjson.GetBytes(raw, field)
-	if !(input.IsArray() && len(input.Array()) > 0) && !(field == "input" && input.Type == gjson.String && strings.TrimSpace(input.String()) != "") {
+	input := ojson.GetBytes(raw, field)
+	if !(input.IsArray() && len(input.Array()) > 0) && !(field == "input" && input.Type == ojson.String && strings.TrimSpace(input.String()) != "") {
 		return fusionError(http.StatusBadRequest, "fusion requires non-empty "+field)
 	}
 	for _, key := range []string{"tools", "functions"} {
-		value := gjson.GetBytes(raw, key)
+		value := ojson.GetBytes(raw, key)
 		if value.Exists() && value.Raw != "null" && value.Raw != "[]" {
 			return fusionError(http.StatusBadRequest, "fusion does not support tool calling; use fallback or round-robin")
 		}
 	}
 	for _, key := range []string{"previous_response_id", "conversation", "background", "audio"} {
-		v := gjson.GetBytes(raw, key)
+		v := ojson.GetBytes(raw, key)
 		if v.Exists() && v.Raw != "null" && v.Raw != "false" && v.String() != "" {
 			return fusionError(http.StatusBadRequest, "fusion does not support "+key)
 		}
@@ -90,13 +89,13 @@ func validateFusionRequest(protocol string, raw []byte, image bool) *interfaces.
 		}
 	}
 	for _, path := range []string{"modalities", "generationConfig.responseModalities"} {
-		for _, modality := range gjson.GetBytes(raw, path).Array() {
+		for _, modality := range ojson.GetBytes(raw, path).Array() {
 			if !strings.EqualFold(modality.String(), "text") {
 				return fusionError(http.StatusBadRequest, "fusion supports only text output")
 			}
 		}
 	}
-	if gjson.GetBytes(raw, "n").Int() > 1 || gjson.GetBytes(raw, "generationConfig.candidateCount").Int() > 1 {
+	if ojson.GetBytes(raw, "n").Int() > 1 || ojson.GetBytes(raw, "generationConfig.candidateCount").Int() > 1 {
 		return fusionError(http.StatusBadRequest, "fusion returns one synthesized answer; multiple candidates are unsupported")
 	}
 	return nil
@@ -120,11 +119,11 @@ func fusionRequest(raw []byte, model string, stream bool, protocol string) []byt
 	body := append([]byte(nil), raw...)
 	body = rewriteComboRequestModel(body, model)
 	if protocol == "gemini" {
-		body, _ = sjson.DeleteBytes(body, "stream")
+		body, _ = ojson.DeleteBytes(body, "stream")
 	} else {
-		body, _ = sjson.SetBytes(body, "stream", stream)
+		body, _ = ojson.SetBytes(body, "stream", stream)
 		if !stream {
-			body, _ = sjson.DeleteBytes(body, "stream_options")
+			body, _ = ojson.DeleteBytes(body, "stream_options")
 		}
 	}
 	return body
@@ -208,14 +207,14 @@ func (h *BaseAPIHandler) prepareFusionJudge(ctx context.Context, entry, exit str
 
 func fusionAnswer(raw []byte, protocol string) string {
 	var text []string
-	add := func(value gjson.Result) {
-		if value.Type == gjson.String && strings.TrimSpace(value.String()) != "" {
+	add := func(value ojson.Result) {
+		if value.Type == ojson.String && strings.TrimSpace(value.String()) != "" {
 			text = append(text, value.String())
 		}
 	}
 	switch protocol {
 	case "openai":
-		content := gjson.GetBytes(raw, "choices.0.message.content")
+		content := ojson.GetBytes(raw, "choices.0.message.content")
 		if content.IsArray() {
 			for _, part := range content.Array() {
 				add(part.Get("text"))
@@ -224,7 +223,7 @@ func fusionAnswer(raw []byte, protocol string) string {
 			add(content)
 		}
 	case "openai-response", "codex":
-		for _, output := range gjson.GetBytes(raw, "output").Array() {
+		for _, output := range ojson.GetBytes(raw, "output").Array() {
 			if output.Get("type").String() == "message" {
 				for _, part := range output.Get("content").Array() {
 					if part.Get("type").String() == "output_text" {
@@ -234,13 +233,13 @@ func fusionAnswer(raw []byte, protocol string) string {
 			}
 		}
 	case "claude":
-		for _, part := range gjson.GetBytes(raw, "content").Array() {
+		for _, part := range ojson.GetBytes(raw, "content").Array() {
 			if part.Get("type").String() == "text" {
 				add(part.Get("text"))
 			}
 		}
 	case "gemini":
-		for _, part := range gjson.GetBytes(raw, "candidates.0.content.parts").Array() {
+		for _, part := range ojson.GetBytes(raw, "candidates.0.content.parts").Array() {
 			if !part.Get("thought").Bool() {
 				add(part.Get("text"))
 			}
@@ -262,15 +261,15 @@ func fusionJudgeRequest(raw []byte, protocol string, combo config.ComboConfig, c
 	body := fusionRequest(raw, combo.JudgeModel, false, protocol)
 	switch protocol {
 	case "openai", "claude":
-		return sjson.SetBytes(body, "messages.-1", map[string]any{"role": "user", "content": prompt})
+		return ojson.SetBytes(body, "messages.-1", map[string]any{"role": "user", "content": prompt})
 	case "openai-response", "codex":
-		input := gjson.GetBytes(body, "input")
-		if input.Type == gjson.String {
-			body, _ = sjson.SetBytes(body, "input", []map[string]any{{"role": "user", "content": input.String()}})
+		input := ojson.GetBytes(body, "input")
+		if input.Type == ojson.String {
+			body, _ = ojson.SetBytes(body, "input", []map[string]any{{"role": "user", "content": input.String()}})
 		}
-		return sjson.SetBytes(body, "input.-1", map[string]any{"role": "user", "content": prompt})
+		return ojson.SetBytes(body, "input.-1", map[string]any{"role": "user", "content": prompt})
 	case "gemini":
-		return sjson.SetBytes(body, "contents.-1", map[string]any{
+		return ojson.SetBytes(body, "contents.-1", map[string]any{
 			"role": "user", "parts": []map[string]string{{"text": prompt}},
 		})
 	}
@@ -311,8 +310,8 @@ func (h *BaseAPIHandler) executeFusionStream(ctx context.Context, entry, exit st
 	judge, judgeOptions := comboMemberExecution(combo.JudgeModel, options)
 	judgeRequest = fusionRequest(judgeRequest, judge, true, entry)
 	// Preserve the caller's request for final streaming usage from the judge.
-	if streamOptions := gjson.GetBytes(raw, "stream_options"); streamOptions.Exists() {
-		judgeRequest, _ = sjson.SetRawBytes(judgeRequest, "stream_options", []byte(streamOptions.Raw))
+	if streamOptions := ojson.GetBytes(raw, "stream_options"); streamOptions.Exists() {
+		judgeRequest, _ = ojson.SetRawBytes(judgeRequest, "stream_options", []byte(streamOptions.Raw))
 	}
 	judgeCtx, cancel := context.WithCancel(comboExecutionContext(ctx))
 	data, headers, errs := h.executeStreamWithAuthManagerFormats(judgeCtx, entry, exit, judge, judgeRequest, alt, false, judgeOptions)

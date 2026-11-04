@@ -7,11 +7,11 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/MoeForge/moego/ojson"
 	"github.com/router-for-me/CLIProxyAPI/v8/internal/config"
 	cliproxyauth "github.com/router-for-me/CLIProxyAPI/v8/sdk/cliproxy/auth"
 	cliproxyexecutor "github.com/router-for-me/CLIProxyAPI/v8/sdk/cliproxy/executor"
 	sdktranslator "github.com/router-for-me/CLIProxyAPI/v8/sdk/translator"
-	"github.com/tidwall/gjson"
 )
 
 // TestBedrockMantleResponsesInputSurvivesProviderSwitch covers a session that moves
@@ -61,7 +61,7 @@ func TestBedrockMantleResponsesInputSurvivesProviderSwitch(t *testing.T) {
 		t.Fatalf("Execute error: %v", err)
 	}
 
-	items := gjson.GetBytes(upstreamBody, "input").Array()
+	items := ojson.GetBytes(upstreamBody, "input").Array()
 	seen := map[string]int{}
 	for _, item := range items {
 		if id := item.Get("id").String(); id != "" {
@@ -136,13 +136,13 @@ func TestBedrockMantleRetriesWithoutStalePreviousResponseID(t *testing.T) {
 	if len(bodies) != 2 {
 		t.Fatalf("upstream calls = %d, want 2", len(bodies))
 	}
-	if got := gjson.GetBytes(bodies[0], "previous_response_id").String(); got != "msg_011Cf1kTSLqzDmUMB7kHWf1w" {
+	if got := ojson.GetBytes(bodies[0], "previous_response_id").String(); got != "msg_011Cf1kTSLqzDmUMB7kHWf1w" {
 		t.Errorf("first attempt dropped previous_response_id: %s", bodies[0])
 	}
-	if gjson.GetBytes(bodies[1], "previous_response_id").Exists() {
+	if ojson.GetBytes(bodies[1], "previous_response_id").Exists() {
 		t.Errorf("retry kept previous_response_id: %s", bodies[1])
 	}
-	if gjson.GetBytes(resp.Payload, "id").String() != "resp_2" {
+	if ojson.GetBytes(resp.Payload, "id").String() != "resp_2" {
 		t.Errorf("payload = %s", resp.Payload)
 	}
 }

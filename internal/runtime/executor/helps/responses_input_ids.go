@@ -3,9 +3,8 @@ package helps
 import (
 	"strings"
 
+	"github.com/MoeForge/moego/ojson"
 	"github.com/router-for-me/CLIProxyAPI/v8/internal/util"
-	"github.com/tidwall/gjson"
-	"github.com/tidwall/sjson"
 )
 
 // DedupeResponsesInputItemIDs drops repeated input item IDs so a Responses
@@ -18,12 +17,40 @@ import (
 // only surfaces after a session moves to a Responses upstream.
 func DedupeResponsesInputItemIDs(body []byte) ([]byte, int) {
 	input := util.GetGJSONBytesNoCopy(body, "input")
-	if !input.IsArray() {
+	rebuilt, duplicates := dedupeResponsesInputItems(input)
+	if duplicates == 0 {
 		return body, 0
+	}
+	updated, errSet := ojson.SetRawBytes(body, "input", rebuilt)
+	if errSet != nil {
+		return body, 0
+	}
+	return updated, duplicates
+}
+
+// DedupeResponsesInputItemIDsDoc applies DedupeResponsesInputItemIDs to doc in
+// place and returns the number of dropped IDs.
+func DedupeResponsesInputItemIDsDoc(doc *ojson.Doc) int {
+	if doc == nil {
+		return 0
+	}
+	rebuilt, duplicates := dedupeResponsesInputItems(doc.Get("input"))
+	if duplicates == 0 {
+		return 0
+	}
+	if errSet := doc.SetRawBytes("input", rebuilt); errSet != nil {
+		return 0
+	}
+	return duplicates
+}
+
+func dedupeResponsesInputItems(input ojson.Result) ([]byte, int) {
+	if !input.IsArray() {
+		return nil, 0
 	}
 	items := input.Array()
 	if len(items) < 2 {
-		return body, 0
+		return nil, 0
 	}
 
 	seen := make(map[string]struct{}, len(items))
@@ -32,11 +59,11 @@ func DedupeResponsesInputItemIDs(body []byte) ([]byte, int) {
 	for _, item := range items {
 		raw := item.Raw
 		itemID := item.Get("id")
-		if itemID.Type == gjson.String {
+		if itemID.Type == ojson.String {
 			id := itemID.String()
 			if id != "" {
 				if _, exists := seen[id]; exists {
-					if next, errDelete := sjson.DeleteBytes([]byte(raw), "id"); errDelete == nil {
+					if next, errDelete := ojson.DeleteBytes([]byte(raw), "id"); errDelete == nil {
 						raw = string(next)
 						duplicates++
 					}
@@ -48,11 +75,7 @@ func DedupeResponsesInputItemIDs(body []byte) ([]byte, int) {
 		rebuilt = append(rebuilt, raw)
 	}
 	if duplicates == 0 {
-		return body, 0
+		return nil, 0
 	}
-	updated, errSet := sjson.SetRawBytes(body, "input", []byte("["+strings.Join(rebuilt, ",")+"]"))
-	if errSet != nil {
-		return body, 0
-	}
-	return updated, duplicates
+	return []byte("[" + strings.Join(rebuilt, ",") + "]"), duplicates
 }

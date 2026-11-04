@@ -10,12 +10,12 @@ import (
 	"testing"
 	"time"
 
+	"github.com/MoeForge/moego/ojson"
 	"github.com/router-for-me/CLIProxyAPI/v8/internal/config"
 	"github.com/router-for-me/CLIProxyAPI/v8/internal/util"
 	cliproxyauth "github.com/router-for-me/CLIProxyAPI/v8/sdk/cliproxy/auth"
 	cliproxyexecutor "github.com/router-for-me/CLIProxyAPI/v8/sdk/cliproxy/executor"
 	sdktranslator "github.com/router-for-me/CLIProxyAPI/v8/sdk/translator"
-	"github.com/tidwall/gjson"
 )
 
 func TestBedrockMantleRequestToFormatMatchesWireProtocol(t *testing.T) {
@@ -247,16 +247,16 @@ func TestBedrockMantleResponsesExecutionUsesNativeEndpoint(t *testing.T) {
 	if upstreamPath != "/openai/v1/responses" {
 		t.Fatalf("upstream path = %q, want %q", upstreamPath, "/openai/v1/responses")
 	}
-	if !gjson.GetBytes(upstreamBody, "input").Exists() {
+	if !ojson.GetBytes(upstreamBody, "input").Exists() {
 		t.Fatalf("native Responses input missing from upstream body: %s", upstreamBody)
 	}
-	if gjson.GetBytes(upstreamBody, "messages").Exists() {
+	if ojson.GetBytes(upstreamBody, "messages").Exists() {
 		t.Fatalf("upstream body was converted to Chat Completions: %s", upstreamBody)
 	}
-	if got := gjson.GetBytes(upstreamBody, "reasoning.effort").String(); got != "medium" {
+	if got := ojson.GetBytes(upstreamBody, "reasoning.effort").String(); got != "medium" {
 		t.Fatalf("reasoning effort = %q, want medium", got)
 	}
-	if got := gjson.GetBytes(resp.Payload, "id").String(); got != "resp_test" {
+	if got := ojson.GetBytes(resp.Payload, "id").String(); got != "resp_test" {
 		t.Fatalf("response id = %q, want resp_test; payload: %s", got, resp.Payload)
 	}
 }
@@ -319,16 +319,16 @@ func TestBedrockMantleClaudeExecutionUsesResponsesEndpoint(t *testing.T) {
 	if upstreamPath != "/openai/v1/responses" {
 		t.Fatalf("upstream path = %q, want %q", upstreamPath, "/openai/v1/responses")
 	}
-	if !gjson.GetBytes(upstreamBody, "input").Exists() || gjson.GetBytes(upstreamBody, "messages").Exists() {
+	if !ojson.GetBytes(upstreamBody, "input").Exists() || ojson.GetBytes(upstreamBody, "messages").Exists() {
 		t.Fatalf("upstream body is not Responses format: %s", upstreamBody)
 	}
-	if gjson.GetBytes(upstreamBody, "stream").Bool() {
+	if ojson.GetBytes(upstreamBody, "stream").Bool() {
 		t.Fatalf("non-stream request enabled upstream streaming: %s", upstreamBody)
 	}
-	if got := gjson.GetBytes(upstreamBody, "reasoning.effort").String(); got != "medium" {
+	if got := ojson.GetBytes(upstreamBody, "reasoning.effort").String(); got != "medium" {
 		t.Fatalf("reasoning effort = %q, want medium", got)
 	}
-	if got := gjson.GetBytes(resp.Payload, "content.0.text").String(); got != "PONG" {
+	if got := ojson.GetBytes(resp.Payload, "content.0.text").String(); got != "PONG" {
 		t.Fatalf("Claude response text = %q, want PONG; payload: %s", got, resp.Payload)
 	}
 }
@@ -406,13 +406,13 @@ func TestBedrockMantleClaudeStreamEmitsClaudeEvents(t *testing.T) {
 	if upstreamPath != "/openai/v1/responses" {
 		t.Fatalf("upstream path = %q, want %q", upstreamPath, "/openai/v1/responses")
 	}
-	if !gjson.GetBytes(upstreamBody, "stream").Bool() {
+	if !ojson.GetBytes(upstreamBody, "stream").Bool() {
 		t.Fatalf("upstream stream flag missing: %s", upstreamBody)
 	}
-	if !gjson.GetBytes(upstreamBody, "tools.0.name").Exists() {
+	if !ojson.GetBytes(upstreamBody, "tools.0.name").Exists() {
 		t.Fatalf("tools missing from Responses body: %s", upstreamBody)
 	}
-	if gjson.GetBytes(upstreamBody, "reasoning_effort").Exists() {
+	if ojson.GetBytes(upstreamBody, "reasoning_effort").Exists() {
 		t.Fatalf("Chat Completions reasoning_effort leaked into Responses body: %s", upstreamBody)
 	}
 	out := joined.String()
@@ -500,10 +500,10 @@ func TestBedrockMantleResponsesStreamUsesNativeEndpoint(t *testing.T) {
 	if upstreamPath != "/openai/v1/responses" {
 		t.Fatalf("upstream path = %q, want %q", upstreamPath, "/openai/v1/responses")
 	}
-	if gjson.GetBytes(upstreamBody, "stream_options").Exists() {
+	if ojson.GetBytes(upstreamBody, "stream_options").Exists() {
 		t.Fatalf("Chat Completions stream_options leaked into Responses body: %s", upstreamBody)
 	}
-	if got := gjson.GetBytes(upstreamBody, "reasoning.effort").String(); got != "high" {
+	if got := ojson.GetBytes(upstreamBody, "reasoning.effort").String(); got != "high" {
 		t.Fatalf("reasoning effort = %q, want high", got)
 	}
 	joined := string(bytes.Join(chunks, []byte("\n")))
@@ -525,7 +525,7 @@ func TestBedrockMantleChatPayloadDoesNotDisableReasoningForOneModelVariant(t *te
 	}`)
 
 	got := exec.sanitizeMantlePayload(payload, "openai.gpt-5.6-luna")
-	if effort := gjson.GetBytes(got, "reasoning_effort").String(); effort != "medium" {
+	if effort := ojson.GetBytes(got, "reasoning_effort").String(); effort != "medium" {
 		t.Fatalf("reasoning_effort = %q, want medium", effort)
 	}
 }
