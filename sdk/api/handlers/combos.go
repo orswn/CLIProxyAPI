@@ -10,11 +10,10 @@ import (
 	"strings"
 	"sync"
 
+	"github.com/MoeForge/moego/ojson"
 	"github.com/router-for-me/CLIProxyAPI/v8/internal/config"
 	"github.com/router-for-me/CLIProxyAPI/v8/internal/interfaces"
 	"github.com/router-for-me/CLIProxyAPI/v8/internal/registry"
-	"github.com/tidwall/gjson"
-	"github.com/tidwall/sjson"
 )
 
 type comboExecutionContextKey struct{}
@@ -115,10 +114,10 @@ func comboFallbackEligible(errMsg *interfaces.ErrorMessage) bool {
 }
 
 func rewriteComboRequestModel(raw []byte, model string) []byte {
-	if len(raw) == 0 || strings.TrimSpace(model) == "" || !gjson.GetBytes(raw, "model").Exists() {
+	if len(raw) == 0 || strings.TrimSpace(model) == "" || !ojson.GetBytes(raw, "model").Exists() {
 		return raw
 	}
-	updated, err := sjson.SetBytes(raw, "model", strings.TrimSpace(model))
+	updated, err := ojson.SetBytes(raw, "model", strings.TrimSpace(model))
 	if err != nil {
 		return raw
 	}
@@ -130,8 +129,8 @@ func rewriteComboResponseModel(raw []byte, model string) []byte {
 		return raw
 	}
 	for _, path := range []string{"model", "modelVersion", "response.model", "response.modelVersion", "message.model"} {
-		if gjson.GetBytes(raw, path).Exists() {
-			if updated, err := sjson.SetBytes(raw, path, model); err == nil {
+		if ojson.GetBytes(raw, path).Exists() {
+			if updated, err := ojson.SetBytes(raw, path, model); err == nil {
 				raw = updated
 			}
 		}

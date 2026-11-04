@@ -3,9 +3,9 @@ package helps
 import (
 	"strings"
 
+	"github.com/MoeForge/moego/ojson"
 	"github.com/router-for-me/CLIProxyAPI/v8/internal/config"
 	sdktranslator "github.com/router-for-me/CLIProxyAPI/v8/sdk/translator"
-	"github.com/tidwall/gjson"
 )
 
 // OpenAICompatResponsesTerminalEvents lists Responses stream events that end a stream.
@@ -55,7 +55,7 @@ func IsOpenAICompatResponsesTerminalEvent(payload []byte, eventName string) bool
 			return true
 		}
 	}
-	payloadType := strings.ToLower(strings.TrimSpace(gjson.GetBytes(payload, "type").String()))
+	payloadType := strings.ToLower(strings.TrimSpace(ojson.GetBytes(payload, "type").String()))
 	if payloadType == "" {
 		return false
 	}

@@ -3,7 +3,7 @@ package helps
 import (
 	"testing"
 
-	"github.com/tidwall/gjson"
+	"github.com/MoeForge/moego/ojson"
 )
 
 func TestDedupeResponsesInputItemIDs(t *testing.T) {
@@ -17,7 +17,7 @@ func TestDedupeResponsesInputItemIDs(t *testing.T) {
 	if duplicates != 1 {
 		t.Fatalf("duplicates = %d, want 1", duplicates)
 	}
-	items := gjson.GetBytes(deduped, "input").Array()
+	items := ojson.GetBytes(deduped, "input").Array()
 	if len(items) != 4 {
 		t.Fatalf("items = %d, want 4: %s", len(items), deduped)
 	}
@@ -62,7 +62,7 @@ func TestDedupeResponsesInputItemIDsKeepsRepeatedCallIDs(t *testing.T) {
 	if duplicates != 0 {
 		t.Fatalf("duplicates = %d, want 0", duplicates)
 	}
-	if got := gjson.GetBytes(deduped, "input.1.call_id").String(); got != "call_1" {
+	if got := ojson.GetBytes(deduped, "input.1.call_id").String(); got != "call_1" {
 		t.Fatalf("call_id = %q, want call_1", got)
 	}
 }

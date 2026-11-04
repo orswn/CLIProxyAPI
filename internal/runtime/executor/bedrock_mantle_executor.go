@@ -13,6 +13,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/MoeForge/moego/ojson"
 	"github.com/router-for-me/CLIProxyAPI/v8/internal/auth/bedrockmantle"
 	"github.com/router-for-me/CLIProxyAPI/v8/internal/config"
 	"github.com/router-for-me/CLIProxyAPI/v8/internal/runtime/executor/helps"
@@ -22,8 +23,6 @@ import (
 	cliproxyexecutor "github.com/router-for-me/CLIProxyAPI/v8/sdk/cliproxy/executor"
 	sdktranslator "github.com/router-for-me/CLIProxyAPI/v8/sdk/translator"
 	log "github.com/sirupsen/logrus"
-	"github.com/tidwall/gjson"
-	"github.com/tidwall/sjson"
 )
 
 // BedrockMantleExecutor implements execution against AWS Bedrock Mantle
@@ -199,8 +198,8 @@ func (e *BedrockMantleExecutor) prepareResponsesPayload(ctx context.Context, pay
 func (e *BedrockMantleExecutor) sanitizeMantlePayload(payload []byte, modelName string) []byte {
 	m := strings.ToLower(modelName)
 	if strings.Contains(m, "gpt-6") || strings.Contains(m, "gpt-5.6") || strings.Contains(m, "astra") {
-		payload, _ = sjson.DeleteBytes(payload, "max_tokens")
-		payload, _ = sjson.DeleteBytes(payload, "max_output_tokens")
+		payload, _ = ojson.DeleteBytes(payload, "max_tokens")
+		payload, _ = ojson.DeleteBytes(payload, "max_output_tokens")
 	}
 	return payload
 }
@@ -257,14 +256,14 @@ func mantleRetryWithoutPreviousResponse(ctx context.Context, payload []byte, sta
 	if statusCode != http.StatusNotFound {
 		return nil, false
 	}
-	if strings.TrimSpace(gjson.GetBytes(payload, "previous_response_id").String()) == "" {
+	if strings.TrimSpace(ojson.GetBytes(payload, "previous_response_id").String()) == "" {
 		return nil, false
 	}
 	message := strings.ToLower(string(responseBody))
 	if !strings.Contains(message, "not_found") && !strings.Contains(message, "not found") {
 		return nil, false
 	}
-	retryPayload, errDelete := sjson.DeleteBytes(payload, "previous_response_id")
+	retryPayload, errDelete := ojson.DeleteBytes(payload, "previous_response_id")
 	if errDelete != nil {
 		return nil, false
 	}
